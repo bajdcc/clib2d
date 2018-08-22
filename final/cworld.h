@@ -42,7 +42,7 @@ namespace clib {
 
     private:
         bool _pause{false}; // 是否暂停
-        vec2 _gravity{0}; // 重力
+        vec2 _gravity; // 重力
         size_t _iterations{10};
 
         body_list _bodies; // 刚体列表

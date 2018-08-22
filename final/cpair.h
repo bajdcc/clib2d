@@ -14,8 +14,8 @@ namespace clib {
 
     // 接触点
     struct ccontact {
-        vec2 position{0}; // 位置
-        vec2 ra{0}, rb{0};
+        vec2 position; // 位置
+        vec2 ra, rb;
         std::array<bool, 2> from_a;
         std::array<size_t, 2> indices;
         decimal separation;
@@ -52,7 +52,7 @@ namespace clib {
 
     private:
         std::weak_ptr<cbody> _a, _b; // 参与碰撞检测的两个刚体
-        vec2 _normal{0}; // 法向量
+        vec2 _normal; // 法向量
         contact_list _contacts; // 接触点列表
     };
 }

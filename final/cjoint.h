@@ -51,15 +51,15 @@ namespace clib {
     protected:
         DISALLOW_COPY_AND_ASSIGN(revolute_joint)
 
-        vec2 _anchor{0}; // 固定位置（世界坐标）
-        vec2 _local_anchor_a{0}; // 刚体a相对坐标
-        vec2 _local_anchor_b{0}; // 刚体b相对坐标
+        vec2 _anchor; // 固定位置（世界坐标）
+        vec2 _local_anchor_a; // 刚体a相对坐标
+        vec2 _local_anchor_b; // 刚体b相对坐标
 
-        vec2 _ra{0}; // a旋转角度向量
-        vec2 _rb{0}; // b旋转角度向量
-        mat22 _mass{0}; // 总质量
-        vec2 _p{0}; // 动量
-        vec2 _bias{0}; // 修正
+        vec2 _ra; // a旋转角度向量
+        vec2 _rb; // b旋转角度向量
+        mat22 _mass; // 总质量
+        vec2 _p; // 动量
+        vec2 _bias; // 修正
     };
 }
 

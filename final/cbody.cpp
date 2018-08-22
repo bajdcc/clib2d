@@ -161,7 +161,7 @@ namespace clib {
 
     // 计算多边形重心
     static vec2 calc_polygon_centroid(const std::vector<vec2> &vertices) {
-        vec2 gc{0};
+        vec2 gc;
         auto size = vertices.size();
         // 重心 = (各三角形重心 * 其面积) / 总面积
         // 三角形重心 = 两向量之和 / 3
@@ -196,7 +196,7 @@ namespace clib {
 
     vec2 polygon_body::operator[](size_t idx) const {
         // 顶点进行旋转变换，返回旋转后位置
-        return (_vertices[idx] - _centroid) * _rotation + _centroid;
+        return _rotation * (_vertices[idx] - _centroid) + _centroid;
     }
 
     vec2 polygon_body::edge(size_t idx) const {
@@ -214,7 +214,7 @@ namespace clib {
             // 获得A各顶点的世界坐标
             auto va = local_to_world((*this)[i]);
             // 获得当前顶点到下一顶点的边的单位法向量
-            auto N = normal(this->edge(i));
+            auto N = edge(i).normal();
             // 最小分离向量
             auto min_sep = inf;
             // 遍历几何物体B

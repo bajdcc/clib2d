@@ -4,8 +4,9 @@
 // Refer: https://github.com/wgtdkp/apollonia
 //
 
-#include <chrono>
 #include <GL/freeglut.h>
+#include <chrono>
+#include <cmath>
 #include "cworld.h"
 
 static auto last_clock = std::chrono::high_resolution_clock::now();
@@ -89,8 +90,8 @@ static void draw_arbiter(const clib::cpair::ptr &pair) {
     auto &contacts = pair->get_contacts();
     for (auto &contact : contacts) {
         auto pos = contact.position;
-        auto ra = pos + glm::normalize(contact.ra) * 0.2;
-        auto rb = pos + glm::normalize(contact.rb) * 0.2;
+        auto ra = pos + contact.ra.normalized() * 0.2;
+        auto rb = pos + contact.rb.normalized() * 0.2;
         glColor3f(0.2f, 0.2f, 1.0f);
         glBegin(GL_LINES);
         glVertex2d(pos.x, pos.y);
@@ -208,7 +209,7 @@ void display() {
     else
         draw_text(5, h - 20, "dt: %.2f ms", dt * 1000);
 
-    world.step(dt);
+    world.step(std::min(dt, 0.01));
     for (auto &body : world.get_bodies()) {
         draw_body(*std::dynamic_pointer_cast<clib::polygon_body>(body).get());
     }

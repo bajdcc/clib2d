@@ -6,8 +6,8 @@
 #include "cpair.h"
 #include "cworld.h"
 
+#include <cassert>
 #include <algorithm>
-#include <GL/freeglut.h>
 
 namespace clib {
 
@@ -46,8 +46,8 @@ namespace clib {
 
     void cpair::pre_step(decimal dt) {
         static const decimal kAllowedPenetration = 0.01;
-        static const decimal kBiasFactor = 0.2;
-        auto tangent = normal(_normal);
+        static const decimal kBiasFactor = 0.2; // 弹性碰撞系数，1.0为完全弹性碰撞
+        auto tangent = _normal.normal();
         auto a = _a.lock();
         auto b = _b.lock();
         for (auto &contact : _contacts) {
@@ -65,7 +65,7 @@ namespace clib {
     }
 
     void cpair::update_impulse() {
-        auto tangent = normal(_normal);
+        auto tangent = _normal.normal();
         auto a = _a.lock();
         auto b = _b.lock();
         for (auto &contact : _contacts) {
@@ -91,7 +91,7 @@ namespace clib {
 
     void cpair::update(const cpair &old_arbiter) {
         const auto &old_contacts = old_arbiter._contacts;
-        auto tangent = normal(_normal);
+        auto tangent = _normal.normal();
         auto a = _a.lock();
         auto b = _b.lock();
         for (auto &new_contact : _contacts) {
@@ -121,7 +121,7 @@ namespace clib {
         // 遍历B物体的边
         for (size_t i = 0; i < body.count(); ++i) {
             // 获得边上的法向量
-            auto edge_normal = normal(body.edge(i));
+            auto edge_normal = body.edge(i).normal();
             // 获得法向量在SAT轴上的投影长度
             auto _dot = dot(edge_normal, N);
             // 找出最小投影，即最小间隙
@@ -138,7 +138,7 @@ namespace clib {
                        size_t idx, const vec2 &v0, const vec2 &v1) {
         size_t num_out = 0;
         // 得到A物体的边v0_v1的单位向量
-        auto N = glm::normalize(v1 - v0);
+        auto N = (v1 - v0).normalized();
         // dist0 = v0_B0 X N
         auto dist0 = cross(contacts_in[0].position - v0, N);
         // dist1 = v0_B1 X N
@@ -187,7 +187,7 @@ namespace clib {
         auto &a = **_pa;
         auto &b = **_pb;
         // 获得SAT的轴
-        auto N = normal(a.edge(ia));
+        auto N = a.edge(ia).normal();
         // 获得最小间隙时的B物体起点索引
         auto idx = incident_edge(N, b);
         // 获得最小间隙时的B物体终点索引

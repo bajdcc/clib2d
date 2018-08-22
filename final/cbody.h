@@ -71,12 +71,12 @@ namespace clib {
         decimal _inv_mass; // 质量倒数（缓存，用于运算）
         decimal _inertia; // 转动惯量
         decimal _inv_inertia; // 转动惯性倒数（缓存，用于运算）
-        vec2 _centroid{0}; // 重心
-        vec2 _position{0}; // 位置
-        mat22 _rotation{1}; // 旋转矩阵
-        vec2 _velocity{0}; // 速度
+        vec2 _centroid; // 重心
+        vec2 _position; // 位置
+        mat22 _rotation{mat22::I}; // 旋转矩阵
+        vec2 _velocity; // 速度
         decimal _angular_velocity{0}; // 角速度
-        vec2 _force{0}; // 受力
+        vec2 _force; // 受力
         decimal _torque{0}; // 扭矩
         decimal _friction{1}; // 摩擦力
     };
