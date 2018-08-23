@@ -29,7 +29,7 @@ Win7上使用CLion+MinGW编译没有问题，Linux、MacOS系统下暂未尝试�
 
 目录（暂定）：
 
-1. 使用OpenGL搭建基本框架
+1. 【c1p1】使用OpenGL搭建基本框架
 2. 工厂模式，渲染第一个*polygon body*矩形物体
 3. 时钟同步，给物体添加重力*gravity*
 4. 绘制物体的受力*force*及速度向量*velocity*
