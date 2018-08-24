@@ -38,7 +38,7 @@ namespace clib {
         // 合外力矩 = 转动惯量 × 角加速度 = 角动量的变化率
         // beta += (M / I) * t
         _angular_velocity += (_torque * _inv_inertia) * dt;
-        // s += v * tt
+        // s += v * t
         _position += _velocity * dt;
         // theta += beta * t
         _rotation = rotate(_angular_velocity * dt) * _rotation;

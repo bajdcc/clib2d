@@ -134,10 +134,12 @@ public:
         // 这里默认物体是中心对称的，重心就是中心，后面会计算重心
         auto p = pos + center;
         auto v = p + V * 0.2;
-        glBegin(GL_LINES);
         glColor3f(0.0f, 1.0f, 0.0f);
+        glBegin(GL_LINES);
         glVertex2d(p.x, p.y);
         glVertex2d(v.x, v.y); // 速度向量
+        glEnd();
+        glBegin(GL_LINES);
         glColor3f(0.2f, 0.2f, 0.2f);
         glVertex2d(p.x, p.y);
         glVertex2d(p.x + R.x1 * 0.2, p.y + R.x2 * 0.2); // 方向向量
