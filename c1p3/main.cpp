@@ -39,15 +39,15 @@ struct v2 {
     v2 &operator=(const v2 &v) = default;
 
     inline v2 operator*(decimal d) const {
-        return v2(x * d, y * d);
+        return v2{x * d, y * d};
     }
 
     inline v2 operator/(decimal d) const {
-        return v2(x / d, y / d);
+        return v2{x / d, y / d};
     }
 
     inline v2 operator+(const v2 &v) const {
-        return v2(x + v.x, y + v.y);
+        return v2{x + v.x, y + v.y};
     }
 
     inline v2 operator-(const v2 &v) const {
@@ -58,6 +58,10 @@ struct v2 {
         x += v.x;
         y += v.y;
         return *this;
+    }
+
+    friend inline v2 operator*(decimal d, const v2 &v) {
+        return v2{d * v.x, d * v.y};
     }
 
     // 叉乘
@@ -279,6 +283,7 @@ public:
 
     // 拖拽物体
     void drag(const v2 &pt, const v2 &offset) override {
+        V += 1.0 / mass * offset;
         angleV += 1.0 / inertia * (pt - pos - center).cross(offset);
     }
 

@@ -31,11 +31,11 @@ Win7上使用CLion+MinGW编译没有问题，Linux、MacOS系统下暂未尝试�
 
 1. 【c1p1】使用OpenGL搭建基本框架
 2. 【c1p2】工厂模式，渲染第一个*polygon body*矩形物体
-3. 时钟同步，给物体添加重力*gravity*
+3. 【c1p3】时钟同步，给物体添加重力*gravity*
 4. 【c1p2】绘制物体的受力*force*及速度向量*velocity*
 5. 【c1p2】给物体添加旋转*rotate*
-6. 求几何凸多边形的*centroid*重心和*inertia*转动惯量（刚体的数据结构）
-7. 给物体添加线冲量和角冲量
+6. 【c1p3】求几何凸多边形的*centroid*重心和*inertia*转动惯量（刚体的数据结构）
+7. 【c1p3】给物体添加线冲量和角冲量
 8. **collision detection 碰撞检测**
     1. **SAT方法**（仅限矩形）
     2. **计算压力作用点（仅限两个以下）位置及方向（及绘制）**
