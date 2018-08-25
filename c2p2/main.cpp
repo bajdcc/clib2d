@@ -5,6 +5,7 @@
 
 #include <GL/freeglut.h>
 #include <chrono>
+#include <cassert>
 #include <cstdio>
 #include <vector>
 #include <memory>
@@ -437,7 +438,6 @@ struct collision {
     std::vector<contact> contacts; // 接触点列表
     c2d_body *bodyA{nullptr}, *bodyB{nullptr}; // 碰撞的两个物体
     size_t idxA{0}, idxB{0}; // 碰撞的两个物体的轴
-    int idxA_d{0}, idxB_d{0}; // 碰撞的两个物体的另一条轴（零=没有，1=下一编号，-1=上一编号）
     decimal satA{0}, satB{0}; // 碰撞的两个SAT
     v2 N; // 法线
 };
@@ -515,26 +515,33 @@ static size_t incident_edge(const v2 &N, c2d_polygon *body) {
 }
 
 // Sutherland-Hodgman（多边形裁剪）
-v2 clip(const v2 &p1, const v2 &p2, const v2 &pt, const v2 &N) {
+size_t clip(std::vector<contact> &out,
+          const std::vector<contact> &in,
+          size_t i,
+          const v2 &p1, const v2 &p2) {
+    size_t num_out = 0;
+    auto N = (p2 - p1).normal();
     // 计算投影
-    auto dist0 = N.dot(p1 - pt);
-    auto dist1 = N.dot(p2 - pt);
+    auto dist0 = N.dot(in[0].pos - p1);
+    auto dist1 = N.dot(in[1].pos - p1);
 
     // 如果投影都小于零，则B中两点都在A内
-    if (dist0 <= 0.0) return p2;
+    if (dist0 <= 0) out[num_out++] = in[0].pos;
+    if (dist1 <= 0) out[num_out++] = in[1].pos;
 
     // 否则两点一个在A内，一个在A外
     if (dist0 * dist1 < 0) {
-        // 计算交点
+        // 计算比率
         auto interp = dist0 / (dist0 - dist1);
-        return p1 + interp * (p2 - p1);
+        // 计算p1,p2与in1,in2交点
+        out[num_out++] = in[0].pos + interp * (in[1].pos - in[0].pos);
     }
 
-    return p2;
+    return num_out;
 }
 
-// 计算碰撞
-void solve_collision(collision &c) {
+// 计算碰撞（返回是否碰撞）
+bool solve_collision(collision &c) {
     if (c.satA < c.satB) { // 排列：A比B的SAT更大，更接近零
         std::swap(c.bodyA, c.bodyB);
         std::swap(c.idxA, c.idxB);
@@ -551,29 +558,33 @@ void solve_collision(collision &c) {
 
     decltype(c.contacts) contacts;
     // 假定两个接触点（即idxB两端点）
+    contacts.emplace_back(bodyB->vertex(c.idxB));
+    contacts.emplace_back(bodyB->vertex(c.idxB + 1));
+    auto tmp = contacts;
 
-    auto va = bodyA->vertex(c.idxA);
-    auto vb = bodyB->vertex(c.idxB);
-    if ((vb - va).dot(c.N) <= 0) { // vb在A内，-1 0 1
-        c.idxB_d = -1;
-        auto vb_1 = bodyB->vertex(c.idxB - 1);
-        auto vb_2 = bodyB->vertex(c.idxB + 1);
-        contacts.emplace_back(clip(vb_1, vb, va, c.N));
-        contacts.emplace_back(clip(vb_2, vb, va, c.N));
-    } else { // 0 1 2
-        c.idxB_d = 1;
-        auto vb_1 = bodyB->vertex(c.idxB + 1);
-        auto vb_2 = bodyB->vertex(c.idxB + 2);
-        contacts.emplace_back(clip(vb, vb_1, va, c.N));
-        contacts.emplace_back(clip(vb_2, vb_1, va, c.N));
+    // 将idxB线段按bodyA进行多边形裁剪
+    for (size_t i = 0; i < bodyA->edges(); ++i) {
+        if (i == c.idxA)
+            continue;
+        if (clip(tmp, contacts, i, bodyA->vertex(i), bodyA->vertex(i + 1)) < 2)
+            return false;
+        contacts = tmp;
     }
+    // 最后才裁剪idxA边
+    auto va = bodyA->vertex(c.idxA);
+    if (clip(tmp, contacts, c.idxA, va, bodyA->vertex(c.idxA + 1)) < 2)
+        return false;
+    contacts = tmp;
 
+    // 筛选交点
     for (auto &contact : contacts) {
         auto sep = (contact.pos - va).dot(c.N);
         if (sep <= 0) { // 找在idxA向bodyA一侧的（bodyA内的接触点）
             c.contacts.push_back(contact);
         }
     }
+
+    return true;
 }
 
 // 两物体碰撞检测
@@ -605,11 +616,12 @@ void collision_detection(const c2d_body::ptr &a, c2d_body::ptr &b) {
         c.idxB = idxB;
         c.satA = satA;
         c.satB = satB;
-        solve_collision(c); // 计算碰撞点
-        collisions.insert(std::make_pair(id, c));
-        // A和B标记成碰撞
-        bodyA->collision++; // 碰撞次数加一
-        bodyB->collision++;
+        if (solve_collision(c)) { // 计算碰撞点
+            collisions.insert(std::make_pair(id, c));
+            // A和B标记成碰撞
+            bodyA->collision++; // 碰撞次数加一
+            bodyB->collision++;
+        }
     } else { // 先前产生过碰撞
         // 先空着
         collision c; // 新建碰撞结构
@@ -619,8 +631,13 @@ void collision_detection(const c2d_body::ptr &a, c2d_body::ptr &b) {
         c.idxB = idxB;
         c.satA = satA;
         c.satB = satB;
-        solve_collision(c); // 计算碰撞点
-        collisions[id] = c;
+        if (solve_collision(c)) { // 计算碰撞点
+            collisions[id] = c;
+        } else { // 没有碰撞
+            collisions.erase(prev);
+            bodyA->collision--; // 碰撞次数减一
+            bodyB->collision--;
+        }
     }
 }
 
@@ -658,17 +675,6 @@ void draw_collision(collision &c) {
         auto ptB2 = bodyB->vertex(c.idxB + 1);
         glVertex2d(ptB1.x, ptB1.y);
         glVertex2d(ptB2.x, ptB2.y);
-        if (c.idxB_d == 1) {
-            ptB1 = ptB2;
-            ptB2 = bodyB->vertex(c.idxB + 2);
-            glVertex2d(ptB1.x, ptB1.y);
-            glVertex2d(ptB2.x, ptB2.y);
-        } else if (c.idxB_d == -1) {
-            ptB2 = ptB1;
-            ptB1 = bodyB->vertex(c.idxB - 1);
-            glVertex2d(ptB1.x, ptB1.y);
-            glVertex2d(ptB2.x, ptB2.y);
-        }
     }
     glEnd();
     if (!c.bodyA->statics) {
