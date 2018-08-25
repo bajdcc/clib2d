@@ -36,8 +36,8 @@ Win7上使用CLion+MinGW编译没有问题，Linux、MacOS系统下暂未尝试�
 5. 【c1p2】给物体添加旋转*rotate*
 6. 【c1p3】求几何凸多边形的*centroid*重心和*inertia*转动惯量（刚体的数据结构）
 7. 【c1p3】给物体添加线冲量和角冲量
-8. **collision detection 碰撞检测**
-    1. **SAT方法**（仅限矩形）
+8. 【c2p1】**collision detection 碰撞检测**
+    1. 【c2p1】**AABB方法**（仅限矩形）及**SAT方法**（仅限凸包）
     2. **计算压力作用点（仅限两个以下）位置及方向（及绘制）**
     3. 实现摩擦力*friction*
     4. 设置弹性碰撞系数*bias*
