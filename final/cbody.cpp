@@ -229,7 +229,7 @@ namespace clib {
                 min_sep = std::min(min_sep, dot(vb - va, N));
             }
             if (min_sep > separation) {
-                separation = min_sep; // 寻找最大间隙
+                separation =  min_sep; // 寻找最大间隙
                 idx = i; // 轴
             }
         }
