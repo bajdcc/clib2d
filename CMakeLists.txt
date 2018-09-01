@@ -32,3 +32,6 @@ add_executable(clib2d-c2p1
 
 add_executable(clib2d-c2p2
         c2p2/main.cpp)
+
+add_executable(clib2d-c2p3
+        c2p3/main.cpp)
