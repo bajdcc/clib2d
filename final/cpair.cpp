@@ -75,6 +75,7 @@ namespace clib {
             auto vn = dot(dv, _normal);
             auto dpn = (-vn + contact.bias) * contact.mass_normal;
             dpn = std::max(contact.pn + dpn, 0.0) - contact.pn;
+            printf("%f %f %f %f %f\n",dpn,vn,contact.bias,contact.mass_normal,contact.pn);
 
             decimal friction = std::sqrt(a->get_friction() * b->get_friction());
             auto vt = dot(dv, tangent);

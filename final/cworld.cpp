@@ -23,6 +23,13 @@ namespace clib {
         return _arbiters;
     }
 
+    void cworld::move(const vec2 &v) {
+        for (auto &body : _bodies) {
+            if (body->get_inv_mass() > 0)
+                body->update_impulse(v * body->get_inv_mass(), vec2());
+        }
+    }
+
     void cworld::step(decimal dt) {
         if (_pause)
             return;

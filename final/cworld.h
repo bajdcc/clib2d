@@ -34,6 +34,8 @@ namespace clib {
         const joint_list &get_joints() const;
         const pair_list &get_arbiters() const;
 
+        void move(const vec2 &v);
+
         void clear();
         void step(decimal dt);
 

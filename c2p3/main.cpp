@@ -18,11 +18,13 @@
 #define GRAVITY -9.8
 #define FRAME_SPAN (1.0 / FPS)
 #define COLLISION_ITERATIONS 10
+#define EPSILON 1e-6
 #define EPSILON_FORCE 1e-2
 #define EPSILON_V 1e-2
 #define EPSILON_ANGLE_V 1e-2
-#define COLL_NORMAL_SCALE 10
-#define COLL_TANGENT_SCALE 3
+#define COLL_NORMAL_SCALE 1
+#define COLL_TANGENT_SCALE 1
+#define ENABLE_SLEEP 1
 
 static auto last_clock = std::chrono::high_resolution_clock::now();
 static auto dt = FRAME_SPAN;
@@ -101,7 +103,7 @@ struct v2 {
     }
 
     v2 N() const {
-        return v2(y, -x);
+        return v2{y, -x};
     }
 
     bool zero(decimal d) const {
@@ -134,6 +136,24 @@ struct m2 {
 
 v2 gravity{0, GRAVITY}; // 重力
 
+// 浮点带倒数
+struct decimal_inv {
+    decimal value{0}, inv{0};
+
+    explicit decimal_inv(decimal v) {
+        set(v);
+    }
+
+    void set(decimal v) {
+        value = v;
+        if (std::isinf(value))
+            inv = 0;
+        else if (std::abs(value) < EPSILON)
+            inv = inf;
+        inv = 1 / value;
+    }
+};
+
 // 刚体基类，由于必然要多态，因此不能用struct
 // 该类为动态创建，所以要用unique_ptr承担内存管理
 class c2d_body {
@@ -158,22 +178,24 @@ public:
     virtual void draw() = 0; // 绘制
 
     // 不想写那么多get/set，先public用着
+#if ENABLE_SLEEP
     bool sleep{false}; // 是否休眠
+#endif
     bool statics{false}; // 是否为静态物体
     int collision{0}; // 参与碰撞的次数
     uint16_t id{0}; // ID
-    decimal mass{1}; // 质量
+    decimal_inv mass{1}; // 质量
     v2 pos; // 位置（世界坐标，下面未注明均为本地坐标）
     v2 center; // 重心
     v2 V; // 速度
     decimal angle{0}; // 角度
     decimal angleV{0}; // 角速度
-    decimal inertia{0}; // 转动惯量
+    decimal_inv inertia{0}; // 转动惯量
     decimal f{1}; // 滑动/静摩擦系数
     m2 R; // 旋转矩阵
     v2 F; // 受力
     v2 Fa; // 受力（累计）
-    decimal M; // 力矩
+    decimal M{0}; // 力矩
 };
 
 // 多边形刚体（仅支持凸多边形，且点集为有序排列）
@@ -213,6 +235,8 @@ public:
 
     // 计算多边形转动惯量
     static decimal calc_polygon_inertia(decimal mass, const std::vector<v2> &vertices) {
+        if (std::isinf(mass))
+            return mass;
         decimal acc0 = 0, acc1 = 0;
         auto size = vertices.size();
         // 转动惯量 = m / 6 * (各三角形面积 * 其(a*a+a*b+b*b)) / (总面积)
@@ -275,7 +299,7 @@ public:
     }
 
     void init() {
-        inertia = calc_polygon_inertia(mass, vertices);
+        inertia.set(calc_polygon_inertia(mass.value, vertices));
         center = calc_polygon_centroid(vertices);
         refresh();
     }
@@ -296,7 +320,10 @@ public:
     }
 
     void update(int n) override {
-        if (statics || sleep) return;
+        if (statics) return;
+#if ENABLE_SLEEP
+        if (sleep) return;
+#endif
         switch (n) {
             case 0:
                 pass0();
@@ -327,8 +354,8 @@ public:
     }
 
     void pass1() {
-        V += F / mass * dt;
-        angleV += M / inertia * dt;
+        V += F * mass.inv * dt;
+        angleV += M * inertia.inv * dt;
     }
 
     void pass2() {
@@ -343,7 +370,7 @@ public:
     }
 
     void pass3() {
-        F += gravity * mass * dt;
+        F += gravity * mass.value * dt;
         Fa += F;
     }
 
@@ -352,6 +379,7 @@ public:
     }
 
     void pass5() {
+#if ENABLE_SLEEP
         // 当合外力和速度为零时，判定休眠
         if (Fa.zero(EPSILON_FORCE) && V.zero(EPSILON_V) && std::abs(angleV) < EPSILON_ANGLE_V) {
             V.x *= 0.1;
@@ -361,12 +389,13 @@ public:
             pass4();
             sleep = true;
         }
+#endif
     }
 
     // 拖拽物体
     void drag(const v2 &pt, const v2 &offset) override {
-        V += 1.0 / mass * offset;
-        angleV += 1.0 / inertia * (pt - pos - center).cross(offset);
+        V += mass.inv * offset;
+        angleV += inertia.inv * (pt - pos - center).cross(offset);
     }
 
     void draw() override {
@@ -379,6 +408,7 @@ public:
             glEnd();
             return;
         }
+#if ENABLE_SLEEP
         if (sleep) { // 画休眠物体
             glColor3f(0.3f, 0.3f, 0.3f);
             glBegin(GL_LINE_LOOP);
@@ -394,6 +424,7 @@ public:
             glEnd();
             return;
         }
+#endif
         // 开启反走样
         glEnable(GL_BLEND);
         glEnable(GL_LINE_SMOOTH);
@@ -422,8 +453,8 @@ public:
         glColor3f(0.8f, 0.2f, 0.2f);
         glBegin(GL_LINES);
         glVertex2d(p.x, p.y);
-        glVertex2d(p.x + (Fa.x >= 0 ? 0.5 : -0.5) * std::log(1 + std::abs(Fa.x)),
-                   p.y + (Fa.y >= 0 ? 0.5 : -0.5) * std::log(1 + std::abs(Fa.y))); // 力向量
+        glVertex2d(p.x + (Fa.x >= 0 ? 0.2 : -0.2) * std::log10(1 + std::abs(Fa.x) * 5),
+                   p.y + (Fa.y >= 0 ? 0.2 : -0.2) * std::log10(1 + std::abs(Fa.y) * 5)); // 力向量
         glEnd();
         glColor3f(0.0f, 1.0f, 0.0f);
         glBegin(GL_LINES);
@@ -481,7 +512,7 @@ static c2d_polygon *make_polygon(decimal mass, const std::vector<v2> &vertices, 
     polygon->refresh();
     auto obj = polygon.get();
     if (statics) {
-        polygon->mass = inf;
+        polygon->mass.set(inf);
         polygon->statics = true;
         static_bodies.push_back(std::move(polygon));
     } else {
@@ -756,8 +787,10 @@ void collision_detection(const c2d_body::ptr &a, c2d_body::ptr &b) {
             // A和B标记成碰撞
             bodyA->collision++; // 碰撞次数加一
             bodyB->collision++;
+#if ENABLE_SLEEP
             bodyA->sleep = false;
             bodyB->sleep = false;
+#endif
         }
     } else { // 先前产生过碰撞
         if (solve_collision(c)) { // 计算碰撞点
@@ -780,9 +813,13 @@ void erase_if(ContainerT &items, const PredicateT &predicate) {
 };
 
 decltype(auto) sleep_bodies() {
+#if ENABLE_SLEEP
     return std::count_if(bodies.begin(), bodies.end(), [&](auto &b) {
         return b->sleep;
     });
+#else
+    return 0;
+#endif
 }
 
 // 碰撞检测
@@ -807,12 +844,16 @@ void collision_prepare(collision &c) {
     auto tangent = c.N.normal(); // 接触面
     // 先计算好碰撞系数相关的量
     for (auto &contact : c.contacts) {
-        auto kn = (1 / a.mass) + (1 / b.mass) +
-                  ((1 / a.inertia) * (contact.ra.cross(c.N) * (-contact.ra.N())) +
-                   (1 / b.inertia) * (contact.rb.cross(c.N) * (-contact.rb.N()))).dot(c.N);
-        auto kt = (1 / a.mass) + (1 / b.mass) +
-                  ((1 / a.inertia) * (contact.ra.cross(tangent) * (-contact.ra.N())) +
-                   (1 / b.inertia) * (contact.rb.cross(tangent) * (-contact.rb.N()))).dot(tangent);
+        auto kn = a.mass.inv + b.mass.inv +
+                  (std::abs(a.inertia.inv) < EPSILON ? 0 :
+                   c.N.dot(a.inertia.inv * (-contact.ra.cross(c.N) * contact.ra.N()))) +
+                  (std::abs(b.inertia.inv) < EPSILON ? 0 :
+                   c.N.dot(b.inertia.inv * (-contact.rb.cross(c.N) * contact.rb.N())));
+        auto kt = a.mass.inv + b.mass.inv +
+                  (std::abs(a.inertia.inv) < EPSILON ? 0 :
+                   tangent.dot(a.inertia.inv * (-contact.ra.cross(tangent) * contact.ra.N()))) +
+                  (std::abs(b.inertia.inv) < EPSILON ? 0 :
+                   tangent.dot(b.inertia.inv * (-contact.rb.cross(tangent) * contact.rb.N())));
         contact.mass_normal = COLL_NORMAL_SCALE / kn;
         contact.mass_tangent = COLL_TANGENT_SCALE / kt;
         contact.bias = -kBiasFactor / dt * std::min(0.0, contact.sep + kAllowedPenetration);
@@ -825,8 +866,8 @@ void collision_update(collision &c) {
     auto &b = *c.bodyB;
     auto tangent = c.N.normal(); // 接触面
     for (auto &contact : c.contacts) {
-        auto dv = (b.V + (b.angleV * (-contact.rb.N()))) -
-                  (a.V + (a.angleV * (-contact.ra.N())));
+        auto dv = (b.V + (-b.angleV * contact.rb.N())) -
+                  (a.V + (-a.angleV * contact.ra.N()));
 
         auto vn = dv.dot(c.N);
         auto dpn = (-vn + contact.bias) * contact.mass_normal;
@@ -837,11 +878,17 @@ void collision_update(collision &c) {
         auto dpt = -vt * contact.mass_tangent;
         dpt = std::max(-friction * contact.pn, std::min(friction * contact.pn, contact.pt + dpt)) - contact.pt;
 
+        a.update(0);
+        b.update(0); // 初始化力和力矩
+
         auto p = dpn * c.N + dpt * tangent;
         a.impulse(-p, contact.ra);
         b.impulse(p, contact.rb);
         contact.pn += dpn;
         contact.pt += dpt;
+
+        a.update(1);
+        b.update(1); // 计算力和力矩，得出速度和角速度
     }
 }
 
@@ -886,6 +933,7 @@ void draw_collision(collision &c) {
     glEnd();
 }
 
+#if ENABLE_SLEEP
 // 去除休眠物体的碰撞
 void collision_remove_sleep() {
     erase_if(collisions, [&](auto &c) {
@@ -896,6 +944,7 @@ void collision_remove_sleep() {
         return c.second.bodyA->sleep && c.second.bodyB->sleep;
     });
 }
+#endif
 
 // 每步操作
 static void c2d_step() {
@@ -916,34 +965,23 @@ static void c2d_step() {
         // 迭代十次
         for (auto i = 0; i < COLLISION_ITERATIONS; ++i) {
 
-            for (auto &body : bodies)
-                body->update(0); // 初始化力和力矩
-
             for (auto &col : collisions) {
                 collision_update(col.second);
             }
-
-            for (auto &body : bodies)
-                body->update(1); // 计算力和力矩，得出速度和角速度
         }
 
-        for (auto &body : bodies)
+        for (auto &body : bodies) {
             body->update(0); // 初始化力和力矩
-
-        for (auto &body : bodies)
             body->update(3); // 添加重力
-
-        for (auto &body : bodies)
             body->update(1); // 计算力和力矩，得出速度和角速度
-
-        for (auto &body : bodies)
             body->update(2); // 计算位移和角度
-
-        for (auto &body : bodies)
             body->update(5); // 判定休眠
+        }
     }
 
+#if ENABLE_SLEEP
     collision_remove_sleep();
+#endif
 
     for (auto &body : static_bodies) {
         body->draw();
@@ -974,7 +1012,9 @@ static void c2d_step() {
 // 移动（调试）
 void c2d_move(const v2 &v) {
     for (auto &body : bodies) {
+#if ENABLE_SLEEP
         body->sleep = false;
+#endif
         body->V += v;
     }
 }
@@ -982,7 +1022,9 @@ void c2d_move(const v2 &v) {
 // 旋转（调试）
 void c2d_rotate(decimal d) {
     for (auto &body : bodies) {
+#if ENABLE_SLEEP
         body->sleep = false;
+#endif
         body->angleV += d;
     }
 }
@@ -991,7 +1033,9 @@ void c2d_rotate(decimal d) {
 void c2d_offset(const v2 &pt, const v2 &offset) {
     auto body = find_body(pt);
     if (body) {
+#if ENABLE_SLEEP
         body->sleep = false;
+#endif
         body->drag(pt, offset);
     }
 }
@@ -1023,14 +1067,9 @@ void scene(int id) {
                     {0.5,  0},
                     {0,    0.5}
             };
-            make_polygon(1, vertices, v2(-0.5, -2));
-            vertices = {
-                    {-0.5, 0},
-                    {0.5,  0},
-                    {0,    0.5}
-            };
-            make_polygon(1, vertices, v2(0.5, -2));
-            make_rect(1, 1.2, 2, v2(0, 1.5));
+            make_polygon(200, vertices, v2(-0.5, -2.9));
+            make_polygon(200, vertices, v2(0.5, -2.9));
+            make_rect(200, 1.2, 2, v2(0, 1.5));
         }
             break;
         case 2: { // 堆叠的方块

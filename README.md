@@ -68,6 +68,10 @@ Win7上使用CLion+MinGW编译没有问题，Linux、MacOS系统下暂未尝试�
 
 - [x] ~~拖动窗口导致的问题~~
 
+目前遇到的问题：
+
+- [ ] 碰撞机制存在问题
+
 ## 文章
 
 - [开篇](http://zhuanlan.zhihu.com/p/42669063)

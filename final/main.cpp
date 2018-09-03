@@ -236,6 +236,10 @@ void mouse(int button, int state, int x, int y) {
 
 }
 
+void move(const clib::vec2 &v) {
+    world.move(v);
+}
+
 void keyboard(unsigned char key, int x, int y) {
     switch (key) {
         case '1':
@@ -257,6 +261,18 @@ void keyboard(unsigned char key, int x, int y) {
         case '5':
             world.clear();
             test_chain();
+            break;
+        case 'w':
+            move(clib::vec2(0, 1));
+            break;
+        case 'a':
+            move(clib::vec2(-1, 0));
+            break;
+        case 's':
+            move(clib::vec2(0, -1));
+            break;
+        case 'd':
+            move(clib::vec2(1, 0));
             break;
         case ' ':
             world.set_pause(!world.is_pause());
