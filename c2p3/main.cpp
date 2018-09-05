@@ -19,15 +19,16 @@
 #define FRAME_SPAN (1.0 / FPS)
 #define COLLISION_ITERATIONS 10
 #define EPSILON 1e-6
-#define EPSILON_FORCE 1e-2
-#define EPSILON_V 1e-2
-#define EPSILON_ANGLE_V 1e-2
+#define EPSILON_FORCE 1e-5
+#define EPSILON_V 1e-5
+#define EPSILON_ANGLE_V 1e-5
 #define COLL_NORMAL_SCALE 1
 #define COLL_TANGENT_SCALE 1
 #define ENABLE_SLEEP 1
 
 static auto last_clock = std::chrono::high_resolution_clock::now();
 static auto dt = FRAME_SPAN;
+static auto dt_inv = FPS;
 static auto paused = false; // 是否暂停
 
 // -------------------------------------------------
@@ -314,9 +315,11 @@ public:
     }
 
     void impulse(const v2 &p, const v2 &r) override {
-        F += p;
-        Fa += p;
-        M += r.cross(p);
+        if (statics) return;
+        auto _p = p * dt_inv;
+        F += _p;
+        Fa += _p;
+        M += r.cross(_p);
     }
 
     void update(int n) override {
@@ -837,7 +840,7 @@ void collision_detection() {
 
 // 碰撞计算准备
 void collision_prepare(collision &c) {
-    static const decimal kAllowedPenetration = 0.01; // 允许穿透
+    static const decimal kAllowedPenetration = -0.001; // 允许穿透
     static const decimal kBiasFactor = 0.2; // 弹性碰撞系数
     const auto &a = *c.bodyA;
     const auto &b = *c.bodyB;
@@ -856,7 +859,7 @@ void collision_prepare(collision &c) {
                    tangent.dot(b.inertia.inv * (-contact.rb.cross(tangent) * contact.rb.N())));
         contact.mass_normal = COLL_NORMAL_SCALE / kn;
         contact.mass_tangent = COLL_TANGENT_SCALE / kt;
-        contact.bias = -kBiasFactor / dt * std::min(0.0, contact.sep + kAllowedPenetration);
+        contact.bias = -kBiasFactor * dt_inv * std::min(0.0, contact.sep + kAllowedPenetration);
     }
 }
 
@@ -1036,7 +1039,7 @@ void c2d_offset(const v2 &pt, const v2 &offset) {
 #if ENABLE_SLEEP
         body->sleep = false;
 #endif
-        body->drag(pt, offset);
+        body->drag(pt, offset * body->mass.value);
     }
 }
 
@@ -1067,9 +1070,9 @@ void scene(int id) {
                     {0.5,  0},
                     {0,    0.5}
             };
-            make_polygon(200, vertices, v2(-0.5, -2.9));
-            make_polygon(200, vertices, v2(0.5, -2.9));
-            make_rect(200, 1.2, 2, v2(0, 1.5));
+            make_polygon(200, vertices, v2(-0.5, -2.9))->f = 0.2;
+            make_polygon(200, vertices, v2(0.5, -2.9))->f = 0.2;
+            make_rect(200, 1.2, 2, v2(0, 1.5))->f = 0.2;
         }
             break;
         case 2: { // 堆叠的方块
@@ -1098,14 +1101,14 @@ void scene(int id) {
         }
             break;
         default: {
-            make_rect(1, 1, 1, v2(0, 0));
-            make_rect(1, 1, 1, v2(1, 0));
+            make_rect(1, 1, 1, v2(0, 0))->f = 0.2;
+            make_rect(1, 1, 1, v2(1, 0))->f = 0.2;
             std::vector<v2> vertices = {
                     {0, 0},
                     {1, 0},
                     {0, 1}
             };
-            make_polygon(1, vertices, v2(0, 1));
+            make_polygon(1, vertices, v2(0, 1))->f = 0.2;
         }
             break;
     }
@@ -1165,7 +1168,7 @@ void display() {
 
     // 绘制文字
     draw_text(10, 20, "clib-2d @bajdcc"); // 暂不支持中文
-    draw_text(w - 110, 20, "FPS: %.1f", 1.0 / dt);
+    draw_text(w - 110, 20, "FPS: %d", FPS);
     draw_text(10, h - 20, "#c2p3");
     draw_text(w - 290, h - 20, "Collisions: %d, Zombie: %d", collisions.size(), sleep_bodies());
     if (paused)
