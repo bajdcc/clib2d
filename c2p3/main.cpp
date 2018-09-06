@@ -19,16 +19,16 @@
 #define FRAME_SPAN (1.0 / FPS)
 #define COLLISION_ITERATIONS 10
 #define EPSILON 1e-6
-#define EPSILON_FORCE 1e-5
-#define EPSILON_V 1e-5
-#define EPSILON_ANGLE_V 1e-5
+#define EPSILON_FORCE 1e-4
+#define EPSILON_V 1e-4
+#define EPSILON_ANGLE_V 1e-4
 #define COLL_NORMAL_SCALE 1
 #define COLL_TANGENT_SCALE 1
 #define ENABLE_SLEEP 1
 
 static auto last_clock = std::chrono::high_resolution_clock::now();
 static auto dt = FRAME_SPAN;
-static auto dt_inv = FPS;
+static auto dt_inv = 1.0 * FPS;
 static auto paused = false; // 是否暂停
 
 // -------------------------------------------------
@@ -385,9 +385,9 @@ public:
 #if ENABLE_SLEEP
         // 当合外力和速度为零时，判定休眠
         if (Fa.zero(EPSILON_FORCE) && V.zero(EPSILON_V) && std::abs(angleV) < EPSILON_ANGLE_V) {
-            V.x *= 0.1;
-            V.y *= 0.1;
-            angleV *= 0.1;
+            V.x = 0;
+            V.y = 0;
+            angleV = 0;
             pass0();
             pass4();
             sleep = true;
@@ -711,11 +711,8 @@ bool solve_collision(collision &c) {
             return false;
         contacts = tmp;
     }
-    // 最后才裁剪idxA边
+
     auto va = bodyA->vertex(c.idxA);
-    if (clip(tmp, contacts, c.idxA, va, bodyA->vertex(c.idxA + 1)) < 2)
-        return false;
-    contacts = tmp;
 
     // 筛选交点
     for (auto &contact : contacts) {
@@ -829,8 +826,10 @@ decltype(auto) sleep_bodies() {
 void collision_detection() {
     auto size = bodies.size();
     for (size_t i = 0; i < size; i++) {
-        for (size_t j = i + 1; j < size; j++) { // 避免重复
-            collision_detection(bodies[i], bodies[j]);
+        if (bodies[i]->sleep) continue;
+        for (size_t j = 0; j < size; j++) {
+            if (bodies[j]->sleep || i < j)
+                collision_detection(bodies[i], bodies[j]);
         }
         for (auto &body : static_bodies) {
             collision_detection(bodies[i], body);
@@ -840,7 +839,6 @@ void collision_detection() {
 
 // 碰撞计算准备
 void collision_prepare(collision &c) {
-    static const decimal kAllowedPenetration = -0.001; // 允许穿透
     static const decimal kBiasFactor = 0.2; // 弹性碰撞系数
     const auto &a = *c.bodyA;
     const auto &b = *c.bodyB;
@@ -859,7 +857,7 @@ void collision_prepare(collision &c) {
                    tangent.dot(b.inertia.inv * (-contact.rb.cross(tangent) * contact.rb.N())));
         contact.mass_normal = COLL_NORMAL_SCALE / kn;
         contact.mass_tangent = COLL_TANGENT_SCALE / kt;
-        contact.bias = -kBiasFactor * dt_inv * std::min(0.0, contact.sep + kAllowedPenetration);
+        contact.bias = -kBiasFactor * dt_inv * std::min(0.0, contact.sep);
     }
 }
 
@@ -874,7 +872,9 @@ void collision_update(collision &c) {
 
         auto vn = dv.dot(c.N);
         auto dpn = (-vn + contact.bias) * contact.mass_normal;
-        dpn = std::max(contact.pn + dpn, 0.0) - contact.pn;
+        if (contact.pn + dpn < 0) {
+            dpn = -contact.pn;
+        }
 
         auto friction = sqrt(a.f * b.f);
         auto vt = dv.dot(tangent);
@@ -1053,10 +1053,10 @@ void clear() {
 
 // 建立四周边界
 void make_bound() {
-    make_rect(inf, 10, 0.1, {0, 3}, true);
-    make_rect(inf, 10, 0.1, {0, -3}, true);
-    make_rect(inf, 0.1, 6, {5, 0}, true);
-    make_rect(inf, 0.1, 6, {-5, 0}, true);
+    make_rect(inf, 10, 0.1, {0, 3}, true)->f = 0.8;
+    make_rect(inf, 10, 0.1, {0, -3}, true)->f = 0.8;
+    make_rect(inf, 0.1, 6, {5, 0}, true)->f = 0.8;
+    make_rect(inf, 0.1, 6, {-5, 0}, true)->f = 0.8;
 }
 
 // 场景
@@ -1168,7 +1168,7 @@ void display() {
 
     // 绘制文字
     draw_text(10, 20, "clib-2d @bajdcc"); // 暂不支持中文
-    draw_text(w - 110, 20, "FPS: %d", FPS);
+    draw_text(w - 110, 20, "FPS: %.1f", dt_inv);
     draw_text(10, h - 20, "#c2p3");
     draw_text(w - 290, h - 20, "Collisions: %d, Zombie: %d", collisions.size(), sleep_bodies());
     if (paused)
@@ -1215,6 +1215,11 @@ void keyboard(unsigned char key, int x, int y) {
                 break;
             case 'g':
                 gravity.y = gravity.y < 0 ? 0 : GRAVITY;
+                for (auto &body : bodies) {
+#if ENABLE_SLEEP
+                    body->sleep = false;
+#endif
+                }
                 break;
             default:
                 break;
@@ -1276,6 +1281,7 @@ void idle() {
 
     // 锁帧
     if (dt > FRAME_SPAN) {
+        dt_inv = 1.0 / dt;
         last_clock = now;
         display();
     }

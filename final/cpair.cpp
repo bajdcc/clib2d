@@ -72,8 +72,6 @@ namespace clib {
             vec2 dv = (b->get_velocity() + cross(b->get_angular_velocity(), contact.rb)) -
                       (a->get_velocity() + cross(a->get_angular_velocity(), contact.ra));
 
-            printf("%f %f %f %f\n",a->get_velocity().x,a->get_velocity().y,b->get_velocity().x,b->get_velocity().y);
-
             auto vn = dot(dv, _normal);
             auto dpn = (-vn + contact.bias) * contact.mass_normal;
             dpn = std::max(contact.pn + dpn, 0.0) - contact.pn;
