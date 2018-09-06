@@ -390,6 +390,7 @@ public:
             angleV = 0;
             pass0();
             pass4();
+            collision = 0;
             sleep = true;
         }
 #endif
@@ -1293,8 +1294,13 @@ void entry(int state) {
 
 int main(int argc, char *argv[]) {
     glutInit(&argc, argv);
-    glutInitWindowSize(800, 600);
-    glutInitWindowPosition(50, 50);
+    if (glutGet(GLUT_SCREEN_WIDTH) < 1920) {
+        glutInitWindowSize(800, 600);
+        glutInitWindowPosition(50, 50);
+    } else {
+        glutInitWindowSize(1200, 900);
+        glutInitWindowPosition(50, 50);
+    }
     glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE); // GLUT_DOUBLE 启用双缓冲，避免闪屏
     glutCreateWindow("Physics Engine -- bajdcc");
     init(); // 初始化
