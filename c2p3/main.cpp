@@ -549,7 +549,7 @@ c2d_body *find_body(const v2 &pos) {
 struct contact {
     v2 pos; // 位置
     v2 ra, rb; // 物体重心到接触点的向量
-    decimal sep{0}; // 分离投影
+    decimal sep{0}; // 分离投影（重叠距离）
     decimal mass_normal{0};
     decimal mass_tangent{0};
     decimal bias{0};
@@ -838,6 +838,7 @@ void collision_detection() {
     }
 }
 
+// https://github.com/erincatto/Box2D/blob/master/Box2D/Dynamics/Contacts/b2ContactSolver.cpp#L127
 // 碰撞计算准备
 void collision_prepare(collision &c) {
     static const decimal kBiasFactor = 0.2; // 弹性碰撞系数
@@ -846,18 +847,18 @@ void collision_prepare(collision &c) {
     auto tangent = c.N.normal(); // 接触面
     // 先计算好碰撞系数相关的量
     for (auto &contact : c.contacts) {
+        auto nA = contact.ra.cross(c.N);
+        auto nB = contact.rb.cross(c.N);
         auto kn = a.mass.inv + b.mass.inv +
-                  (std::abs(a.inertia.inv) < EPSILON ? 0 :
-                   c.N.dot(a.inertia.inv * (-contact.ra.cross(c.N) * contact.ra.N()))) +
-                  (std::abs(b.inertia.inv) < EPSILON ? 0 :
-                   c.N.dot(b.inertia.inv * (-contact.rb.cross(c.N) * contact.rb.N())));
+                std::abs(a.inertia.inv) * nA * nA +
+                std::abs(b.inertia.inv) * nB * nB;
+        contact.mass_normal = kn > 0 ? COLL_NORMAL_SCALE / kn : 0.0;
+        auto tA = contact.ra.cross(tangent);
+        auto tB = contact.rb.cross(tangent);
         auto kt = a.mass.inv + b.mass.inv +
-                  (std::abs(a.inertia.inv) < EPSILON ? 0 :
-                   tangent.dot(a.inertia.inv * (-contact.ra.cross(tangent) * contact.ra.N()))) +
-                  (std::abs(b.inertia.inv) < EPSILON ? 0 :
-                   tangent.dot(b.inertia.inv * (-contact.rb.cross(tangent) * contact.rb.N())));
-        contact.mass_normal = COLL_NORMAL_SCALE / kn;
-        contact.mass_tangent = COLL_TANGENT_SCALE / kt;
+                std::abs(a.inertia.inv) * tA * tA +
+                std::abs(b.inertia.inv) * tB * tB;
+        contact.mass_tangent = kt > 0 ? COLL_TANGENT_SCALE / kt : 0.0;
         contact.bias = -kBiasFactor * dt_inv * std::min(0.0, contact.sep);
     }
 }
@@ -871,16 +872,18 @@ void collision_update(collision &c) {
         auto dv = (b.V + (-b.angleV * contact.rb.N())) -
                   (a.V + (-a.angleV * contact.ra.N()));
 
+        // 法向力
         auto vn = dv.dot(c.N);
         auto dpn = (-vn + contact.bias) * contact.mass_normal;
         if (contact.pn + dpn < 0) {
             dpn = -contact.pn;
         }
 
-        auto friction = sqrt(a.f * b.f);
+        // 切向力
         auto vt = dv.dot(tangent);
         auto dpt = -vt * contact.mass_tangent;
-        dpt = std::max(-friction * contact.pn, std::min(friction * contact.pn, contact.pt + dpt)) - contact.pt;
+        auto friction = sqrt(a.f * b.f) * contact.pn;
+        dpt = std::max(-friction, std::min(friction, contact.pt + dpt)) - contact.pt;
 
         a.update(0);
         b.update(0); // 初始化力和力矩
