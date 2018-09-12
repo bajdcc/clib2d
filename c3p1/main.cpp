@@ -24,6 +24,7 @@
 #define EPSILON_ANGLE_V 1e-4
 #define COLL_NORMAL_SCALE 1
 #define COLL_TANGENT_SCALE 1
+#define COLL_BIAS 0.8
 #define ENABLE_SLEEP 1
 
 static auto last_clock = std::chrono::high_resolution_clock::now();
@@ -1012,7 +1013,7 @@ void collision_detection() {
 // https://github.com/erincatto/Box2D/blob/master/Box2D/Dynamics/Contacts/b2ContactSolver.cpp#L127
 // 碰撞计算准备
 void collision_prepare(collision &c) {
-    static const auto kBiasFactor = 0.2; // 弹性碰撞系数
+    static const auto kBiasFactor = COLL_BIAS; // 弹性碰撞系数
     const auto &a = *c.bodyA;
     const auto &b = *c.bodyB;
     auto tangent = c.N.normal(); // 接触面
@@ -1297,7 +1298,7 @@ void scene(int id) {
             break;
         case 4: { // 牛顿摆
             auto ground = make_rect(inf, 10, 0.1, {0, -3}, true);
-            auto box1 = make_rect(500, 0.5, 0.5, {5.75, 3});
+            auto box1 = make_rect(100, 0.5, 0.5, {5.75, 3});
             make_revolute_joint(ground, box1, {1.75, 3});
             for (size_t i = 0; i < 5; ++i) {
                 auto box2 = make_rect(100, 0.5, 0.5, {1.25 - i * 0.5, -1});
