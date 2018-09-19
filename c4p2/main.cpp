@@ -992,15 +992,27 @@ struct contact {
     decimal bias{0};
     decimal pn{0}; // 法向冲量
     decimal pt{0}; // 切向冲量
-    int idxA{0}, idxB{0}; // （交点属于的）物体a和b的边索引+1，为正则属于B，为负属于A
+    union {
+        struct {
+            int idx; // （交点属于的）物体a和b的边索引+1，为正则属于B，为负属于A
+        } polygon;
+        struct {
+            // none
+        } circle;
+    } A{0}, B{0};
 
-    contact(v2 _pos, size_t index) : pos(_pos), idxA(index), idxB(index) {}
+    contact(v2 _pos) : pos(_pos) {}
+
+    contact(v2 _pos, size_t index) : contact(_pos) {
+        A.polygon.idx = index;
+        B.polygon.idx = index;
+    }
 
     bool operator==(const contact &other) const {
-        if (idxA == other.idxA && idxB == other.idxB) {
+        if (A.polygon.idx == other.A.polygon.idx && B.polygon.idx == other.B.polygon.idx) {
             return true;
         }
-        return idxA == other.idxB && idxB == other.idxA; // 是否反了
+        return A.polygon.idx == other.B.polygon.idx && B.polygon.idx == other.A.polygon.idx; // 是否反了
     }
 
     bool operator!=(const contact &other) const {
@@ -1012,13 +1024,13 @@ struct contact {
 struct collision {
     std::vector<contact> contacts; // 接触点列表
     c2d_body *bodyA{nullptr}, *bodyB{nullptr}; // 碰撞的两个物体
-    union {
+    union intern {
         struct {
             size_t idx;
             decimal sat;
         } polygon;
         struct {
-
+            // none
         } circle;
     } A{0}, B{0};
     v2 N; // 法线
@@ -1039,9 +1051,8 @@ uint32_t make_id(uint16_t a, uint16_t b) {
 // separation：最大间隙
 // idx：最大间隙的轴
 // 参考Box2D：https://github.com/erincatto/Box2D/blob/master/Box2D/Collision/b2CollidePolygon.cpp#L23
-int max_separating_axis_polygon(c2d_polygon *a, c2d_polygon *b,
-                                decimal &separation, size_t &idx) {
-    separation = -inf;
+int max_separating_axis_polygon(c2d_polygon *a, c2d_polygon *b, collision::intern &c) {
+    c.polygon.sat = -inf;
     // 遍历几何物体A的所有顶点
     for (size_t i = 0; i < a->edges(); ++i) {
         // 获得A各顶点的世界坐标
@@ -1061,17 +1072,16 @@ int max_separating_axis_polygon(c2d_polygon *a, c2d_polygon *b,
             // min_sep = 以AA'边的法向量N为轴，将B物体各顶点所做投影的最小长度
             min_sep = std::min(min_sep, (vb - va).dot(N));
         }
-        if (min_sep > separation) {
-            separation = min_sep; // 寻找最大间隙
-            idx = i; // 轴
+        if (min_sep > c.polygon.sat) {
+            c.polygon.sat = min_sep; // 寻找最大间隙
+            c.polygon.idx = i; // 轴
         }
     }
-    return separation > 0 ? 0 : 1; // 0则不相交
+    return c.polygon.sat > 0 ? 0 : 1; // 0则不相交
 }
 
-int max_separating_axis_polygon_circle(c2d_polygon *a, c2d_circle *b,
-                                       decimal &separation, size_t &idx) {
-    separation = inf;
+int max_separating_axis_polygon_circle(c2d_polygon *a, c2d_circle *b, collision::intern &c) {
+    c.polygon.sat = inf;
     // 遍历几何物体A的所有顶点
     for (size_t i = 0; i < a->edges(); ++i) {
         // 获得A各顶点的世界坐标
@@ -1090,29 +1100,36 @@ int max_separating_axis_polygon_circle(c2d_polygon *a, c2d_circle *b,
         if (sat >= 0 && sat <= edgeL) { // AB上
             // 圆心到AB的距离
             const auto sep = std::sqrt(ac.magnitude_square() - sat * sat) - b->r.value;
-            if (sep < 0 && sep < separation) {
-                separation = sep; // 寻找最大间隙
-                idx = i; // 轴
+            if (sep < 0 && sep < c.polygon.sat) {
+                c.polygon.sat = sep; // 寻找最大间隙
+                c.polygon.idx = i; // 轴
             }
         } else if (sat > -b->r.value) { // AB，A前
             const auto sep = (b->pos - va).magnitude() - b->r.value;
-            if (sep < 0 && sep < separation) {
-                separation = sep; // 寻找最大间隙
-                idx = i; // 轴
+            if (sep < 0 && sep < c.polygon.sat) {
+                c.polygon.sat = sep; // 寻找最大间隙
+                c.polygon.idx = i; // 轴
             }
         } else if (sat <= edgeL + b->r.value) { // AB，B后
             const auto sep = a->vertex(i + 1).magnitude() - b->r.value;
-            if (sep < 0 && sep < separation) {
-                separation = sep; // 寻找最大间隙
-                idx = i; // 轴
+            if (sep < 0 && sep < c.polygon.sat) {
+                c.polygon.sat = sep; // 寻找最大间隙
+                c.polygon.idx = i; // 轴
             }
         }
     }
-    return separation > 0 ? 0 : 1; // 0则不相交
+    return c.polygon.sat > 0 ? 0 : 1; // 0则不相交
 }
 
-int max_separating_axis(c2d_body *a, c2d_body *b,
-                        decimal &separation, size_t &idx) {
+int max_separating_axis_circle(c2d_circle *a, c2d_circle *b) {
+    const auto r = a->r.value + b->r.value;
+    if ((a->pos - b->pos).magnitude_square() < r * r) { // 距离小于半径和，为相交
+        return 1;
+    }
+    return 0;
+}
+
+int max_separating_axis(c2d_body *a, c2d_body *b, collision::intern &c) {
     const auto typeA = a->type();
     const auto typeB = b->type();
     if (typeA == C2D_POLYGON) {
@@ -1120,17 +1137,22 @@ int max_separating_axis(c2d_body *a, c2d_body *b,
             return max_separating_axis_polygon(
                     dynamic_cast<c2d_polygon *>(a),
                     dynamic_cast<c2d_polygon *>(b),
-                    separation, idx);
+                    c);
         } else if (typeB == C2D_CIRCLE) {
             const auto val = max_separating_axis_polygon_circle(
                     dynamic_cast<c2d_polygon *>(a),
                     dynamic_cast<c2d_circle *>(b),
-                    separation, idx);
+                    c);
             return val == 1 ? 1 : 2;
         }
     } else if (typeA == C2D_CIRCLE) {
         if (typeB == C2D_POLYGON) {
-            return max_separating_axis(b, a, separation, idx);
+            return max_separating_axis(b, a, c);
+        } else if (typeB == C2D_CIRCLE) {
+            const auto val = max_separating_axis_circle(
+                    dynamic_cast<c2d_circle *>(a),
+                    dynamic_cast<c2d_circle *>(b));
+            return val == 1 ? 1 : 2;
         }
     }
     return 0;
@@ -1191,7 +1213,7 @@ size_t clip(std::vector<contact> &out,
         auto interp = dist0 / (dist0 - dist1);
         // 计算p1,p2与in1,in2交点
         out[num_out].pos = in[0].pos + interp * (in[1].pos - in[0].pos);
-        out[num_out].idxA = -(int) i - 1;
+        out[num_out].A.polygon.idx = -(int) i - 1;
         ++num_out;
     }
 
@@ -1261,17 +1283,50 @@ bool solve_collision_polygon_circle(collision &c) {
     if (c.bodyB->contains(pos0)) { // 圆与起点
         const auto ca = (bodyB->pos - pos0).normalize();
         const auto pt = bodyB->pos - ca * bodyB->r.value;
-        pos1 = pos0 = pt;
+        pos0 = pt;
+        contacts.erase(contacts.begin() + 1);
         c.N = ca;
     } else if (c.bodyB->contains(pos1)) { // 圆与终点
         const auto ca = (bodyB->pos - pos1).normalize();
         const auto pt = bodyB->pos - ca * bodyB->r.value;
-        pos1 = pos0 = pt;
+        pos1 = pt;
+        contacts.erase(contacts.begin());
         c.N = ca;
     } else { // 圆与线相交
         c.N = (pos1 - pos0).normal();
-        pos0 = pos1 = bodyB->pos - c.N * (bodyB->r.value + 0.001);
+        pos0 = bodyB->pos - c.N * (bodyB->r.value);
+        contacts.erase(contacts.begin() + 1);
     }
+
+    // 筛选交点
+    for (auto &contact : contacts) {
+        // 交点：contact.pos
+        // 参考点：接触边端点va
+        // 接触边法向量（指向物体B）
+        auto sep = (contact.pos - va).dot(c.N);
+        if (sep <= 0) { // 找在idxA向bodyA一侧的（bodyA内的接触点）
+            contact.sep = sep; // sep越小，端点va到交点pos所成线段的斜率越接近法线N
+            contact.ra = contact.pos - c.bodyA->world();
+            contact.rb = contact.pos - c.bodyB->world();
+            c.contacts.push_back(contact);
+        }
+    }
+
+    return true;
+}
+
+// 计算碰撞（圆）
+bool solve_collision_circle(collision &c) {
+    auto bodyA = dynamic_cast<c2d_circle *>(c.bodyA);
+    auto bodyB = dynamic_cast<c2d_circle *>(c.bodyB);
+
+    c.N = (bodyB->pos - bodyA->pos).normalize();
+
+    decltype(c.contacts) contacts;
+    contacts.emplace_back(bodyA->pos + c.N * bodyA->r.value);
+    contacts.emplace_back(bodyB->pos - c.N * bodyB->r.value);
+
+    const auto va = (contacts[0].pos + contacts[1].pos) / 2 - c.N.normal();
 
     // 筛选交点
     for (auto &contact : contacts) {
@@ -1310,7 +1365,7 @@ bool solve_collision(collision &c) {
             std::swap(c.A, c.B);
             return solve_collision_polygon_circle(c);
         } else if (typeB == C2D_CIRCLE) {
-
+            return solve_collision_circle(c);
         }
     }
     return false;
@@ -1338,14 +1393,16 @@ void collision_update(collision &c, const collision &old_c) {
 bool collision_detection(const c2d_body::ptr &a, c2d_body::ptr &b) {
     auto bodyA = a.get();
     auto bodyB = b.get();
-    decimal satA{0}, satB{0};
-    size_t idxA{0}, idxB{0};
     auto id = make_id(bodyA->id, bodyB->id);
     auto _axis = 0;
 
+    collision c;
+    c.bodyA = bodyA;
+    c.bodyB = bodyB;
+
     if (!AABB_collide(bodyA, bodyB) ||
-        (((_axis = max_separating_axis(bodyA, bodyB, satA, idxA)) != 1) ||
-         (_axis == 2 ? true : (max_separating_axis(bodyB, bodyA, satB, idxB) != 1)))) { // 是则不碰撞
+        (((_axis = max_separating_axis(bodyA, bodyB, c.A)) != 1) ||
+         (_axis == 2 ? true : (max_separating_axis(bodyB, bodyA, c.B) != 1)))) { // 是则不碰撞
         auto prev = collisions.find(id); // 查找下先前是否有碰撞
         if (prev != collisions.end()) { // 先前碰撞过，标记成不碰撞
             collisions.erase(prev); // 从碰撞数组中删掉
@@ -1353,26 +1410,6 @@ bool collision_detection(const c2d_body::ptr &a, c2d_body::ptr &b) {
             bodyB->collision--;
         }
         return false; // max_sa < 0 不相交
-    }
-
-    // 新建碰撞结构
-    collision c;
-    const auto typeA = bodyA->type();
-    const auto typeB = bodyB->type();
-
-    c.bodyA = bodyA;
-    c.bodyB = bodyB;
-
-    if (typeA == C2D_POLYGON) {
-        c.A.polygon.idx = idxA;
-        c.A.polygon.sat = satA;
-    } else {
-    }
-
-    if (typeB == C2D_POLYGON) {
-        c.B.polygon.idx = idxB;
-        c.B.polygon.sat = satB;
-    } else {
     }
 
     // 相交，产生碰撞
@@ -1696,35 +1733,35 @@ void scene(int id) {
                     {0.5,  0},
                     {0,    0.5}
             };
-            make_polygon(200, vertices, v2(-0.5, -2.9))->f = 0.2;
-            make_polygon(200, vertices, v2(0.5, -2.9))->f = 0.2;
-            make_rect(200, 1.2, 2, v2(0, 1.5))->f = 0.2;
+            make_polygon(200, vertices, {-0.5, -2.9})->f = 0.2;
+            make_polygon(200, vertices, {0.5, -2.9})->f = 0.2;
+            make_rect(200, 1.2, 2, {0, 1.5})->f = 0.2;
         }
             break;
         case 2: { // 堆叠的方块
             make_bound();
-            std::default_random_engine e;
-            std::normal_distribution<decimal> dist(-0.1, 0.1);
+            std::default_random_engine e((uint32_t) time(nullptr));
+            std::normal_distribution<decimal> dist{-0.1, 0.1};
             for (auto i = 0; i < 10; ++i) {
                 auto x = dist(e);
-                auto body = make_rect(1, 0.5, 0.4, v2(x, -2.6 + 0.4 * i));
+                auto body = make_rect(1, 0.5, 0.4, {x, -2.6 + 0.4 * i});
                 body->f = 0.2;
             }
         }
             break;
         case 3: { // 金字塔
             make_bound();
+            //make_circle(10, 0.4, {-0.15, 2})->f = 0.2;
             v2 x{-2.0, -2.4};
             v2 y;
             int n = 10;
             for (auto i = 0; i < n; ++i) {
                 y = x;
                 for (auto j = i; j < n; ++j) {
-                    auto body = make_rect(1, 0.4, 0.4, y);
-                    body->f = 0.2;
-                    y += v2{0.41, 0.0};
+                    make_rect(1, 0.4, 0.4, y)->f = 0.2;
+                    y += {0.41, 0.0};
                 }
-                x += v2{0.205, 0.41};
+                x += {0.205, 0.41};
             }
         }
             break;
@@ -1752,16 +1789,38 @@ void scene(int id) {
             }
         }
             break;
+        case 6: { // 金字塔（圆与多边形）
+            make_bound();
+            v2 x{-2.0, -2.4};
+            v2 y;
+            int n = 10;
+            std::default_random_engine e((uint32_t) time(nullptr));
+            std::uniform_real_distribution<decimal> dist{0.15, 0.2};
+            std::uniform_int_distribution<int> dist2{0, 1};
+            for (auto i = 0; i < n; ++i) {
+                y = x;
+                for (auto j = i; j < n; ++j) {
+                    if (dist2(e) == 1) {
+                        make_circle(1, dist(e), y)->f = 0.2;
+                    } else {
+                        make_rect(1, 0.4, 0.4, y)->f = 0.2;
+                    }
+                    y += {0.41, 0.0};
+                }
+                x += {0.205, 0.41};
+            }
+        }
+            break;
         default: {
             make_bound();
-            make_rect(1, 1, 1, v2(0, 0))->f = 0.2;
-            make_circle(1, 0.5, v2(1, 0))->f = 0.2;
+            make_rect(1, 1, 1, {0, 0})->f = 0.2;
+            make_circle(1, 0.5, {1, 0})->f = 0.2;
             std::vector<v2> vertices = {
                     {0, 0},
                     {1, 0},
                     {0, 1}
             };
-            make_polygon(1, vertices, v2(0, 1))->f = 0.2;
+            make_polygon(1, vertices, {0, 1})->f = 0.2;
         }
             break;
     }
