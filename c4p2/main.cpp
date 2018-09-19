@@ -33,6 +33,7 @@ static auto last_clock = std::chrono::high_resolution_clock::now();
 static auto dt = FRAME_SPAN;
 static auto dt_inv = 1.0 * FPS;
 static auto paused = false; // 是否暂停
+static auto title = std::string{"[TITLE]"}; // 标题
 
 // -------------------------------------------------
 // 以下为物理引擎部分
@@ -275,7 +276,7 @@ public:
     using ptr = std::unique_ptr<c2d_polygon>;
 
     c2d_polygon(uint16_t _id, decimal _mass, const std::vector<v2> &_vertices)
-            : c2d_body(_id, _mass), vertices(_vertices), verticesWorld(_vertices) {
+        : c2d_body(_id, _mass), vertices(_vertices), verticesWorld(_vertices) {
         init();
     }
 
@@ -598,7 +599,7 @@ public:
     using ptr = std::unique_ptr<c2d_circle>;
 
     c2d_circle(uint16_t _id, decimal _mass, decimal _r)
-            : c2d_body(_id, _mass), r(_r) {
+        : c2d_body(_id, _mass), r(_r) {
         init();
     }
 
@@ -885,7 +886,7 @@ public:
     }
 
     c2d_revolute_joint(c2d_body *_a, c2d_body *_b, const v2 &_anchor) :
-            c2d_joint(_a, _b), anchor(_anchor) {
+        c2d_joint(_a, _b), anchor(_anchor) {
         local_anchor_a = m2().rotate(-a->angle).rotate(anchor - a->world());
         local_anchor_b = m2().rotate(-b->angle).rotate(anchor - b->world());
     }
@@ -943,10 +944,10 @@ static c2d_polygon *make_rect(decimal mass, decimal w, decimal h, const v2 &pos,
     w = std::abs(w);
     h = std::abs(h);
     std::vector<v2> vertices = { // 设置四个顶点，逆时针
-            {w / 2,  h / 2},
-            {-w / 2, h / 2},
-            {-w / 2, -h / 2},
-            {w / 2,  -h / 2}
+        {w / 2,  h / 2},
+        {-w / 2, h / 2},
+        {-w / 2, -h / 2},
+        {w / 2,  -h / 2}
     };
     return make_polygon(mass, vertices, pos, statics);
 }
@@ -1135,14 +1136,14 @@ int max_separating_axis(c2d_body *a, c2d_body *b, collision::intern &c) {
     if (typeA == C2D_POLYGON) {
         if (typeB == C2D_POLYGON) {
             return max_separating_axis_polygon(
-                    dynamic_cast<c2d_polygon *>(a),
-                    dynamic_cast<c2d_polygon *>(b),
-                    c);
+                dynamic_cast<c2d_polygon *>(a),
+                dynamic_cast<c2d_polygon *>(b),
+                c);
         } else if (typeB == C2D_CIRCLE) {
             const auto val = max_separating_axis_polygon_circle(
-                    dynamic_cast<c2d_polygon *>(a),
-                    dynamic_cast<c2d_circle *>(b),
-                    c);
+                dynamic_cast<c2d_polygon *>(a),
+                dynamic_cast<c2d_circle *>(b),
+                c);
             return val == 1 ? 1 : 2;
         }
     } else if (typeA == C2D_CIRCLE) {
@@ -1150,8 +1151,8 @@ int max_separating_axis(c2d_body *a, c2d_body *b, collision::intern &c) {
             return max_separating_axis(b, a, c);
         } else if (typeB == C2D_CIRCLE) {
             const auto val = max_separating_axis_circle(
-                    dynamic_cast<c2d_circle *>(a),
-                    dynamic_cast<c2d_circle *>(b));
+                dynamic_cast<c2d_circle *>(a),
+                dynamic_cast<c2d_circle *>(b));
             return val == 1 ? 1 : 2;
         }
     }
@@ -1265,7 +1266,7 @@ bool solve_collision_polygon(collision &c) {
     return true;
 }
 
-// 计算碰撞（多边形与圆）
+// 计算碰撞（多边形与圆，这里的问题比较多）
 bool solve_collision_polygon_circle(collision &c) {
     auto bodyA = dynamic_cast<c2d_polygon *>(c.bodyA);
     auto bodyB = dynamic_cast<c2d_circle *>(c.bodyB);
@@ -1280,22 +1281,27 @@ bool solve_collision_polygon_circle(collision &c) {
 
     const auto va = pos0;
 
-    if (c.bodyB->contains(pos0)) { // 圆与起点
+    const auto abL = (pos1 - pos0).magnitude();
+    const auto ab = (pos1 - pos0).normalize();
+
+    c.N = ab.normal();
+
+    const auto sat = ab.dot(bodyB->pos - pos0);
+
+    if (sat >= 0 && sat <= abL) { // 圆与线相交
+        c.N = ab.normal();
+        pos1 = pos0 + ab * sat; // 垂足
+        pos0 = bodyB->pos - c.N * (bodyB->r.value); // 圆上一点
+    } else if (c.bodyB->contains(pos0)) { // 起点在圆内
         const auto ca = (bodyB->pos - pos0).normalize();
         const auto pt = bodyB->pos - ca * bodyB->r.value;
-        pos0 = pt;
-        contacts.erase(contacts.begin() + 1);
+        pos1 = pt;
         c.N = ca;
-    } else if (c.bodyB->contains(pos1)) { // 圆与终点
+    } else if (c.bodyB->contains(pos1)) { // 终点在圆内
         const auto ca = (bodyB->pos - pos1).normalize();
         const auto pt = bodyB->pos - ca * bodyB->r.value;
-        pos1 = pt;
-        contacts.erase(contacts.begin());
+        pos0 = pt;
         c.N = ca;
-    } else { // 圆与线相交
-        c.N = (pos1 - pos0).normal();
-        pos0 = bodyB->pos - c.N * (bodyB->r.value);
-        contacts.erase(contacts.begin() + 1);
     }
 
     // 筛选交点
@@ -1727,18 +1733,20 @@ void scene(int id) {
     clear();
     switch (id) {
         case 1: { // 一矩形、两三角形
+            title = "[SCENE 1] One rectangle and two triangles";
             make_bound();
             std::vector<v2> vertices = {
-                    {-0.5, 0},
-                    {0.5,  0},
-                    {0,    0.5}
+                {-0.5, 0},
+                {0.5,  0},
+                {0,    0.5}
             };
-            make_polygon(200, vertices, {-0.5, -2.9})->f = 0.2;
-            make_polygon(200, vertices, {0.5, -2.9})->f = 0.2;
-            make_rect(200, 1.2, 2, {0, 1.5})->f = 0.2;
+            make_polygon(2, vertices, {-0.5, -2.9})->f = 0.2;
+            make_polygon(2, vertices, {0.5, -2.9})->f = 0.2;
+            make_rect(2, 1.2, 2, {0, 1.5})->f = 0.2;
         }
             break;
         case 2: { // 堆叠的方块
+            title = "[SCENE 2] Rectangle stack";
             make_bound();
             std::default_random_engine e((uint32_t) time(nullptr));
             std::normal_distribution<decimal> dist{-0.1, 0.1};
@@ -1750,6 +1758,7 @@ void scene(int id) {
         }
             break;
         case 3: { // 金字塔
+            title = "[SCENE 3] Rectangle pyramid";
             make_bound();
             //make_circle(10, 0.4, {-0.15, 2})->f = 0.2;
             v2 x{-2.0, -2.4};
@@ -1766,16 +1775,18 @@ void scene(int id) {
         }
             break;
         case 4: { // 牛顿摆
+            title = "[SCENE 4] Newton's cradle";
             auto ground = make_rect(inf, 10, 0.1, {0, -3}, true);
-            auto box1 = make_rect(100, 0.5, 0.5, {5.75, 3});
+            auto box1 = make_rect(1, 0.5, 0.5, {5.75, 3});
             make_revolute_joint(ground, box1, {1.75, 3});
             for (size_t i = 0; i < 5; ++i) {
-                auto box2 = make_rect(100, 0.5, 0.5, {1.25 - i * 0.5, -1});
+                auto box2 = make_rect(1, 0.5, 0.5, {1.25 - i * 0.5, -1});
                 make_revolute_joint(ground, box2, {1.25 - i * 0.5, 3});
             }
         }
             break;
         case 5: { // 铰链
+            title = "[SCENE 5] Joints";
             auto ground = make_rect(1, 10, 0.1, {0, -3}, true);
             ground->f = 0.8;
             const auto mass = 10.0;
@@ -1790,20 +1801,47 @@ void scene(int id) {
         }
             break;
         case 6: { // 金字塔（圆与多边形）
+            title = "[SCENE 6] Rectangle and circle pyramid";
             make_bound();
             v2 x{-2.0, -2.4};
             v2 y;
             int n = 10;
             std::default_random_engine e((uint32_t) time(nullptr));
             std::uniform_real_distribution<decimal> dist{0.15, 0.2};
-            std::uniform_int_distribution<int> dist2{0, 1};
+            std::uniform_int_distribution<int> dist2{0, 4};
             for (auto i = 0; i < n; ++i) {
                 y = x;
                 for (auto j = i; j < n; ++j) {
-                    if (dist2(e) == 1) {
-                        make_circle(1, dist(e), y)->f = 0.2;
-                    } else {
-                        make_rect(1, 0.4, 0.4, y)->f = 0.2;
+                    switch (dist2(e)) {
+                        case 1:
+                            make_rect(1, 0.4, 0.4, y)->f = 0.2;
+                            break;
+                        case 2: {
+                            static const auto sqrt_1_3 = 1 / std::sqrt(3);
+                            static const std::vector<v2> vertices = {
+                                {0.2, -0.2 * sqrt_1_3},
+                                {0, 0.4 * sqrt_1_3},
+                                {-0.2, -0.2 * sqrt_1_3}
+                            };
+                            make_polygon(1, vertices, y)->f = 0.2;
+                        }
+                            break;
+                        case 3:{
+                            static const auto sqrt_3 = std::sqrt(3);
+                            static const std::vector<v2> vertices = {
+                                {0.2, 0},
+                                {0.1, 0.1 * sqrt_3},
+                                {-0.1, 0.1 * sqrt_3},
+                                {-0.2, 0},
+                                {-0.1, -0.1 * sqrt_3},
+                                {0.1, -0.1 * sqrt_3},
+                            };
+                            make_polygon(1, vertices, y)->f = 0.2;
+                        }
+                            break;
+                        default:
+                            make_circle(1, dist(e), y)->f = 0.2;
+                            break;
                     }
                     y += {0.41, 0.0};
                 }
@@ -1812,13 +1850,14 @@ void scene(int id) {
         }
             break;
         default: {
+            title = "[SCENE DEFAULT] Rectangle, triangle and circle";
             make_bound();
             make_rect(1, 1, 1, {0, 0})->f = 0.2;
             make_circle(1, 0.5, {1, 0})->f = 0.2;
-            std::vector<v2> vertices = {
-                    {0, 0},
-                    {1, 0},
-                    {0, 1}
+            static std::vector<v2> vertices = {
+                {0, 0},
+                {1, 0},
+                {0, 1}
             };
             make_polygon(1, vertices, {0, 1})->f = 0.2;
         }
@@ -1885,6 +1924,8 @@ void display() {
     draw_text(w - 290, h - 20, "Collisions: %d, Zombie: %d", collisions.size(), sleep_bodies());
     if (paused)
         draw_text(w / 2 - 30, 20, "PAUSED");
+
+    draw_text(w / 2 - 200, 80, title.c_str());
 
     glutSwapBuffers(); // 切换双缓冲
 }
