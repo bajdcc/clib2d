@@ -275,7 +275,7 @@ public:
     using ptr = std::unique_ptr<c2d_polygon>;
 
     c2d_polygon(uint16_t _id, decimal _mass, const std::vector<v2> &_vertices)
-        : c2d_body(_id, _mass), vertices(_vertices), verticesWorld(_vertices) {
+            : c2d_body(_id, _mass), vertices(_vertices), verticesWorld(_vertices) {
         init();
     }
 
@@ -598,7 +598,7 @@ public:
     using ptr = std::unique_ptr<c2d_circle>;
 
     c2d_circle(uint16_t _id, decimal _mass, decimal _r)
-        : c2d_body(_id, _mass), r(_r) {
+            : c2d_body(_id, _mass), r(_r) {
         init();
     }
 
@@ -885,7 +885,7 @@ public:
     }
 
     c2d_revolute_joint(c2d_body *_a, c2d_body *_b, const v2 &_anchor) :
-        c2d_joint(_a, _b), anchor(_anchor) {
+            c2d_joint(_a, _b), anchor(_anchor) {
         local_anchor_a = m2().rotate(-a->angle).rotate(anchor - a->world());
         local_anchor_b = m2().rotate(-b->angle).rotate(anchor - b->world());
     }
@@ -943,10 +943,10 @@ static c2d_polygon *make_rect(decimal mass, decimal w, decimal h, const v2 &pos,
     w = std::abs(w);
     h = std::abs(h);
     std::vector<v2> vertices = { // 设置四个顶点，逆时针
-        {w / 2,  h / 2},
-        {-w / 2, h / 2},
-        {-w / 2, -h / 2},
-        {w / 2,  -h / 2}
+            {w / 2,  h / 2},
+            {-w / 2, h / 2},
+            {-w / 2, -h / 2},
+            {w / 2,  -h / 2}
     };
     return make_polygon(mass, vertices, pos, statics);
 }
@@ -1118,14 +1118,14 @@ int max_separating_axis(c2d_body *a, c2d_body *b,
     if (typeA == C2D_POLYGON) {
         if (typeB == C2D_POLYGON) {
             return max_separating_axis_polygon(
-                dynamic_cast<c2d_polygon *>(a),
-                dynamic_cast<c2d_polygon *>(b),
-                separation, idx);
+                    dynamic_cast<c2d_polygon *>(a),
+                    dynamic_cast<c2d_polygon *>(b),
+                    separation, idx);
         } else if (typeB == C2D_CIRCLE) {
             const auto val = max_separating_axis_polygon_circle(
-                dynamic_cast<c2d_polygon *>(a),
-                dynamic_cast<c2d_circle *>(b),
-                separation, idx);
+                    dynamic_cast<c2d_polygon *>(a),
+                    dynamic_cast<c2d_circle *>(b),
+                    separation, idx);
             return val == 1 ? 1 : 2;
         }
     } else if (typeA == C2D_CIRCLE) {
@@ -1247,37 +1247,31 @@ bool solve_collision_polygon(collision &c) {
 bool solve_collision_polygon_circle(collision &c) {
     auto bodyA = dynamic_cast<c2d_polygon *>(c.bodyA);
     auto bodyB = dynamic_cast<c2d_circle *>(c.bodyB);
-    // 计算SAT的轴法线
-    // edge = A物体离B物体最近的边
-    // N = edge的法线，指向B物体
-    c.N = bodyA->edge(c.A.polygon.idx).normal();
 
     decltype(c.contacts) contacts;
     // 假定两个接触点（即idxA两端点）
     contacts.emplace_back(bodyA->vertex(c.A.polygon.idx), -bodyA->index(c.A.polygon.idx) - 1);
     contacts.emplace_back(bodyA->vertex(c.A.polygon.idx + 1), -bodyA->index(c.A.polygon.idx + 1) - 1);
 
-    const auto _ab = contacts[1].pos - contacts[0].pos;
-    const auto abL = _ab.magnitude();
-    const auto ab = _ab.normalize();
-    const auto ac = bodyB->pos - contacts[0].pos;
-    const auto sat = ab.dot(bodyB->pos - contacts[0].pos);
-    const auto pt = contacts[0].pos + ab * sat; // 垂足
-    const auto dist = ac.magnitude_square() - sat * sat; // 圆心到AB距离
-    const auto dist2 = std::sqrt(bodyB->r.square - dist); // 垂足到交点长度
-    auto pt1 = pt - ab * dist2;
-    auto pt2 = pt + ab * dist2;
-    auto sat1 = (pt1 - contacts[0].pos).dot(ab);
-    auto sat2 = (pt2 - contacts[0].pos).dot(ab);
-    sat1 = std::max(0.0, std::min(sat1, abL));
-    sat2 = std::max(0.0, std::min(sat2, abL));
-    pt1 = contacts[0].pos + sat1 * ab;
-    pt2 = contacts[0].pos + sat2 * ab;
+    auto &pos0 = contacts[0].pos;
+    auto &pos1 = contacts[1].pos;
 
-    const auto va = contacts[0].pos;
+    const auto va = pos0;
 
-    contacts[0].pos = pt1;
-    contacts[1].pos = pt2;
+    if (c.bodyB->contains(pos0)) { // 圆与起点
+        const auto ca = (bodyB->pos - pos0).normalize();
+        const auto pt = bodyB->pos - ca * bodyB->r.value;
+        pos1 = pos0 = pt;
+        c.N = ca;
+    } else if (c.bodyB->contains(pos1)) { // 圆与终点
+        const auto ca = (bodyB->pos - pos1).normalize();
+        const auto pt = bodyB->pos - ca * bodyB->r.value;
+        pos1 = pos0 = pt;
+        c.N = ca;
+    } else { // 圆与线相交
+        c.N = (pos1 - pos0).normal();
+        pos0 = pos1 = bodyB->pos - c.N * (bodyB->r.value + 0.001);
+    }
 
     // 筛选交点
     for (auto &contact : contacts) {
@@ -1698,9 +1692,9 @@ void scene(int id) {
         case 1: { // 一矩形、两三角形
             make_bound();
             std::vector<v2> vertices = {
-                {-0.5, 0},
-                {0.5,  0},
-                {0,    0.5}
+                    {-0.5, 0},
+                    {0.5,  0},
+                    {0,    0.5}
             };
             make_polygon(200, vertices, v2(-0.5, -2.9))->f = 0.2;
             make_polygon(200, vertices, v2(0.5, -2.9))->f = 0.2;
@@ -1763,9 +1757,9 @@ void scene(int id) {
             make_rect(1, 1, 1, v2(0, 0))->f = 0.2;
             make_circle(1, 0.5, v2(1, 0))->f = 0.2;
             std::vector<v2> vertices = {
-                {0, 0},
-                {1, 0},
-                {0, 1}
+                    {0, 0},
+                    {1, 0},
+                    {0, 1}
             };
             make_polygon(1, vertices, v2(0, 1))->f = 0.2;
         }
