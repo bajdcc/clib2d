@@ -25,6 +25,7 @@
 #define COLL_NORMAL_SCALE 1
 #define COLL_TANGENT_SCALE 1
 #define COLL_BIAS 0.8
+#define COLL_POLY_CIR_BIAS 0
 #define ENABLE_SLEEP 1
 #define CIRCLE_N 60
 #define PI2 (2 * M_PI)
@@ -276,7 +277,7 @@ public:
     using ptr = std::unique_ptr<c2d_polygon>;
 
     c2d_polygon(uint16_t _id, decimal _mass, const std::vector<v2> &_vertices)
-        : c2d_body(_id, _mass), vertices(_vertices), verticesWorld(_vertices) {
+            : c2d_body(_id, _mass), vertices(_vertices), verticesWorld(_vertices) {
         init();
     }
 
@@ -599,7 +600,7 @@ public:
     using ptr = std::unique_ptr<c2d_circle>;
 
     c2d_circle(uint16_t _id, decimal _mass, decimal _r)
-        : c2d_body(_id, _mass), r(_r) {
+            : c2d_body(_id, _mass), r(_r) {
         init();
     }
 
@@ -886,7 +887,7 @@ public:
     }
 
     c2d_revolute_joint(c2d_body *_a, c2d_body *_b, const v2 &_anchor) :
-        c2d_joint(_a, _b), anchor(_anchor) {
+            c2d_joint(_a, _b), anchor(_anchor) {
         local_anchor_a = m2().rotate(-a->angle).rotate(anchor - a->world());
         local_anchor_b = m2().rotate(-b->angle).rotate(anchor - b->world());
     }
@@ -944,10 +945,10 @@ static c2d_polygon *make_rect(decimal mass, decimal w, decimal h, const v2 &pos,
     w = std::abs(w);
     h = std::abs(h);
     std::vector<v2> vertices = { // 设置四个顶点，逆时针
-        {w / 2,  h / 2},
-        {-w / 2, h / 2},
-        {-w / 2, -h / 2},
-        {w / 2,  -h / 2}
+            {w / 2,  h / 2},
+            {-w / 2, h / 2},
+            {-w / 2, -h / 2},
+            {w / 2,  -h / 2}
     };
     return make_polygon(mass, vertices, pos, statics);
 }
@@ -1136,14 +1137,14 @@ int max_separating_axis(c2d_body *a, c2d_body *b, collision::intern &c) {
     if (typeA == C2D_POLYGON) {
         if (typeB == C2D_POLYGON) {
             return max_separating_axis_polygon(
-                dynamic_cast<c2d_polygon *>(a),
-                dynamic_cast<c2d_polygon *>(b),
-                c);
+                    dynamic_cast<c2d_polygon *>(a),
+                    dynamic_cast<c2d_polygon *>(b),
+                    c);
         } else if (typeB == C2D_CIRCLE) {
             const auto val = max_separating_axis_polygon_circle(
-                dynamic_cast<c2d_polygon *>(a),
-                dynamic_cast<c2d_circle *>(b),
-                c);
+                    dynamic_cast<c2d_polygon *>(a),
+                    dynamic_cast<c2d_circle *>(b),
+                    c);
             return val == 1 ? 1 : 2;
         }
     } else if (typeA == C2D_CIRCLE) {
@@ -1151,8 +1152,8 @@ int max_separating_axis(c2d_body *a, c2d_body *b, collision::intern &c) {
             return max_separating_axis(b, a, c);
         } else if (typeB == C2D_CIRCLE) {
             const auto val = max_separating_axis_circle(
-                dynamic_cast<c2d_circle *>(a),
-                dynamic_cast<c2d_circle *>(b));
+                    dynamic_cast<c2d_circle *>(a),
+                    dynamic_cast<c2d_circle *>(b));
             return val == 1 ? 1 : 2;
         }
     }
@@ -1291,7 +1292,7 @@ bool solve_collision_polygon_circle(collision &c) {
     if (sat >= 0 && sat <= abL) { // 圆与线相交
         c.N = ab.normal();
         pos1 = pos0 + ab * sat; // 垂足
-        pos0 = bodyB->pos - c.N * (bodyB->r.value); // 圆上一点
+        pos0 = bodyB->pos - c.N * (bodyB->r.value + COLL_POLY_CIR_BIAS); // 圆上一点
     } else if (c.bodyB->contains(pos0)) { // 起点在圆内
         const auto ca = (bodyB->pos - pos0).normalize();
         const auto pt = bodyB->pos - ca * bodyB->r.value;
@@ -1504,6 +1505,7 @@ void collision_prepare(collision &c) {
     }
 }
 
+// https://github.com/erincatto/Box2D/blob/master/Box2D/Dynamics/Contacts/b2ContactSolver.cpp#L324
 // 碰撞计算
 void collision_update(collision &c) {
     auto &a = *c.bodyA;
@@ -1516,24 +1518,37 @@ void collision_update(collision &c) {
         // 法向力
         auto vn = dv.dot(c.N);
         auto dpn = (-vn + contact.bias) * contact.mass_normal;
-        if (contact.pn + dpn < 0) {
-            dpn = -contact.pn;
-        }
+        auto _pn = std::max(contact.pn + dpn, 0.0);
+        dpn = _pn - contact.pn;
+        contact.pn = _pn;
+
+        a.update(0);
+        b.update(0); // 初始化力和力矩
+
+        auto p = dpn * c.N;
+        a.impulse(-p, contact.ra);
+        b.impulse(p, contact.rb);
+
+        a.update(1);
+        b.update(1); // 计算力和力矩，得出速度和角速度
+
+        dv = (b.V + (-b.angleV * contact.rb.N())) -
+             (a.V + (-a.angleV * contact.ra.N()));
 
         // 切向力
         auto vt = dv.dot(tangent);
         auto dpt = -vt * contact.mass_tangent;
         auto friction = sqrt(a.f * b.f) * contact.pn;
-        dpt = std::max(-friction, std::min(friction, contact.pt + dpt)) - contact.pt;
+        auto _pt = std::max(-friction, std::min(friction, contact.pt + dpt));
+        dpt = _pt - contact.pt;
+        contact.pt = _pt;
 
         a.update(0);
         b.update(0); // 初始化力和力矩
 
-        auto p = dpn * c.N + dpt * tangent;
+        p = dpt * tangent;
         a.impulse(-p, contact.ra);
         b.impulse(p, contact.rb);
-        contact.pn += dpn;
-        contact.pt += dpt;
 
         a.update(1);
         b.update(1); // 计算力和力矩，得出速度和角速度
@@ -1736,9 +1751,9 @@ void scene(int id) {
             title = "[SCENE 1] One rectangle and two triangles";
             make_bound();
             std::vector<v2> vertices = {
-                {-0.5, 0},
-                {0.5,  0},
-                {0,    0.5}
+                    {-0.5, 0},
+                    {0.5,  0},
+                    {0,    0.5}
             };
             make_polygon(2, vertices, {-0.5, -2.9})->f = 0.2;
             make_polygon(2, vertices, {0.5, -2.9})->f = 0.2;
@@ -1819,22 +1834,22 @@ void scene(int id) {
                         case 2: {
                             static const auto sqrt_1_3 = 1 / std::sqrt(3);
                             static const std::vector<v2> vertices = {
-                                {0.2, -0.2 * sqrt_1_3},
-                                {0, 0.4 * sqrt_1_3},
-                                {-0.2, -0.2 * sqrt_1_3}
+                                    {0.2,  -0.2 * sqrt_1_3},
+                                    {0,    0.4 * sqrt_1_3},
+                                    {-0.2, -0.2 * sqrt_1_3}
                             };
                             make_polygon(1, vertices, y)->f = 0.2;
                         }
                             break;
-                        case 3:{
+                        case 3: {
                             static const auto sqrt_3 = std::sqrt(3);
                             static const std::vector<v2> vertices = {
-                                {0.2, 0},
-                                {0.1, 0.1 * sqrt_3},
-                                {-0.1, 0.1 * sqrt_3},
-                                {-0.2, 0},
-                                {-0.1, -0.1 * sqrt_3},
-                                {0.1, -0.1 * sqrt_3},
+                                    {0.2,  0},
+                                    {0.1,  0.1 * sqrt_3},
+                                    {-0.1, 0.1 * sqrt_3},
+                                    {-0.2, 0},
+                                    {-0.1, -0.1 * sqrt_3},
+                                    {0.1,  -0.1 * sqrt_3},
                             };
                             make_polygon(1, vertices, y)->f = 0.2;
                         }
@@ -1855,9 +1870,9 @@ void scene(int id) {
             make_rect(1, 1, 1, {0, 0})->f = 0.2;
             make_circle(1, 0.5, {1, 0})->f = 0.2;
             static std::vector<v2> vertices = {
-                {0, 0},
-                {1, 0},
-                {0, 1}
+                    {0, 0},
+                    {1, 0},
+                    {0, 1}
             };
             make_polygon(1, vertices, {0, 1})->f = 0.2;
         }
@@ -1925,7 +1940,7 @@ void display() {
     if (paused)
         draw_text(w / 2 - 30, 20, "PAUSED");
 
-    draw_text(w / 2 - 200, 80, title.c_str());
+    draw_text(w / 2 - 200, (glutGet(GLUT_SCREEN_WIDTH) < 1920) ? 60 : 80, title.c_str());
 
     glutSwapBuffers(); // 切换双缓冲
 }
