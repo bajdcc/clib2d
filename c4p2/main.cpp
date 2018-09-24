@@ -24,8 +24,8 @@
 #define EPSILON_ANGLE_V 1e-4
 #define COLL_NORMAL_SCALE 1
 #define COLL_TANGENT_SCALE 1
-#define COLL_BIAS 0.8
-#define COLL_POLY_CIR_BIAS 0
+#define COLL_BIAS 0.75
+#define COLL_CO 0.1
 #define ENABLE_SLEEP 1
 #define CIRCLE_N 60
 #define PI2 (2 * M_PI)
@@ -82,6 +82,12 @@ struct v2 {
     inline v2 &operator+=(const v2 &v) {
         x += v.x;
         y += v.y;
+        return *this;
+    }
+
+    inline v2 &operator-=(const v2 &v) {
+        x -= v.x;
+        y -= v.y;
         return *this;
     }
 
@@ -265,10 +271,11 @@ public:
     decimal angle{0}; // 角度
     decimal angleV{0}; // 角速度
     decimal_inv inertia{0}; // 转动惯量
-    decimal f{1}; // 滑动/静摩擦系数
+    decimal f{0.2}; // 滑动/静摩擦系数
     v2 F; // 受力
     v2 Fa; // 受力（累计）
     decimal M{0}; // 力矩
+    decimal CO{COLL_CO}; // 弹性碰撞系数
 };
 
 // 多边形刚体（仅支持凸多边形，且点集为有序排列）
@@ -1250,6 +1257,16 @@ bool solve_collision_polygon(collision &c) {
 
     auto va = bodyA->vertex(c.A.polygon.idx);
 
+    auto &pos0 = contacts[0].pos;
+    auto &pos1 = contacts[1].pos;
+    const auto CO = bodyA->CO * bodyB->CO;
+    auto dist = std::abs((va - pos0).dot(c.N));
+    auto bias = std::log10(1 + dist) * CO;
+    pos0 -= c.N * bias;
+    dist = std::abs((va - pos1).dot(c.N));
+    bias = std::log10(1 + dist) * CO;
+    pos1 -= c.N * bias;
+
     // 筛选交点
     for (auto &contact : contacts) {
         // 交点：contact.pos
@@ -1288,21 +1305,32 @@ bool solve_collision_polygon_circle(collision &c) {
     c.N = ab.normal();
 
     const auto sat = ab.dot(bodyB->pos - pos0);
+    const auto CO = bodyA->CO * bodyB->CO;
 
     if (sat >= 0 && sat <= abL) { // 圆与线相交
         c.N = ab.normal();
         pos1 = pos0 + ab * sat; // 垂足
-        pos0 = bodyB->pos - c.N * (bodyB->r.value + COLL_POLY_CIR_BIAS); // 圆上一点
+        pos0 = bodyB->pos - c.N * (bodyB->r.value); // 圆上一点
+        const auto dist = (pos1 - pos0).dot(c.N);
+        const auto bias = std::log10(1 + dist) * CO;
+        pos0 -= c.N * bias;
+        contacts.erase(contacts.begin() + 1);
     } else if (c.bodyB->contains(pos0)) { // 起点在圆内
         const auto ca = (bodyB->pos - pos0).normalize();
         const auto pt = bodyB->pos - ca * bodyB->r.value;
-        pos1 = pt;
         c.N = ca;
+        const auto dist = (pos0 - pt).dot(c.N);
+        const auto bias = std::log10(1 + dist) * CO;
+        pos0 = pt - c.N * bias;
+        contacts.erase(contacts.begin() + 1);
     } else if (c.bodyB->contains(pos1)) { // 终点在圆内
         const auto ca = (bodyB->pos - pos1).normalize();
         const auto pt = bodyB->pos - ca * bodyB->r.value;
-        pos0 = pt;
         c.N = ca;
+        const auto dist = (pos1 - pt).dot(c.N);
+        const auto bias = std::log10(1 + dist) * CO;
+        pos0 = pt - c.N * bias;
+        contacts.erase(contacts.begin() + 1);
     }
 
     // 筛选交点
@@ -1332,6 +1360,15 @@ bool solve_collision_circle(collision &c) {
     decltype(c.contacts) contacts;
     contacts.emplace_back(bodyA->pos + c.N * bodyA->r.value);
     contacts.emplace_back(bodyB->pos - c.N * bodyB->r.value);
+
+    auto &pos0 = contacts[0].pos;
+    auto &pos1 = contacts[1].pos;
+
+    const auto CO = bodyA->CO * bodyB->CO;
+    const auto dist = (pos0 - pos1).dot(c.N);
+    const auto bias = std::log10(1 + dist) * CO;
+    pos0 += c.N * bias;
+    pos1 -= c.N * bias;
 
     const auto va = (contacts[0].pos + contacts[1].pos) / 2 - c.N.normal();
 
@@ -1792,11 +1829,13 @@ void scene(int id) {
         case 4: { // 牛顿摆
             title = "[SCENE 4] Newton's cradle";
             auto ground = make_rect(inf, 10, 0.1, {0, -3}, true);
-            auto box1 = make_rect(1, 0.5, 0.5, {5.75, 3});
+            auto box1 = make_rect(100, 0.5, 0.5, {5.75, 3});
+            box1->CO = 0.99;
             make_revolute_joint(ground, box1, {1.75, 3});
-            for (size_t i = 0; i < 5; ++i) {
-                auto box2 = make_rect(1, 0.5, 0.5, {1.25 - i * 0.5, -1});
-                make_revolute_joint(ground, box2, {1.25 - i * 0.5, 3});
+            for (size_t i = 0; i < 6; ++i) {
+                auto box2 = make_rect(100, 0.5, 0.5, {1.25 - i * 0.500001, -1});
+                box2->CO = 0.99;
+                make_revolute_joint(ground, box2, {1.25 - i * 0.500001, 3});
             }
         }
             break;
