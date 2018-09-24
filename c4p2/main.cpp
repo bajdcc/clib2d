@@ -25,6 +25,7 @@
 #define COLL_NORMAL_SCALE 1
 #define COLL_TANGENT_SCALE 1
 #define COLL_BIAS 0.75
+#define COLL_CIR_POLY_BIAS 2e-4
 #define COLL_CO 0.1
 #define ENABLE_SLEEP 1
 #define CIRCLE_N 60
@@ -961,15 +962,15 @@ static c2d_polygon *make_rect(decimal mass, decimal w, decimal h, const v2 &pos,
 }
 
 static c2d_circle *make_circle(decimal mass, decimal r, const v2 &pos, bool statics = false) {
-    auto polygon = std::make_unique<c2d_circle>(global_id++, mass, r);
-    polygon->pos = pos;
-    auto obj = polygon.get();
+    auto circle = std::make_unique<c2d_circle>(global_id++, mass, r);
+    circle->pos = pos;
+    auto obj = circle.get();
     if (statics) {
-        polygon->mass.set(inf);
-        polygon->statics = true;
-        static_bodies.push_back(std::move(polygon));
+        circle->mass.set(inf);
+        circle->statics = true;
+        static_bodies.push_back(std::move(circle));
     } else {
-        bodies.push_back(std::move(polygon));
+        bodies.push_back(std::move(circle));
     }
     return obj;
 }
@@ -995,6 +996,7 @@ c2d_body *find_body(const v2 &pos) {
 struct contact {
     v2 pos; // 位置
     v2 ra, rb; // 物体重心到接触点的向量
+    c2d_body_t ta, tb; // 物体的类型
     decimal sep{0}; // 分离投影（重叠距离）
     decimal mass_normal{0};
     decimal mass_tangent{0};
@@ -1010,7 +1012,7 @@ struct contact {
         } circle;
     } A{0}, B{0};
 
-    contact(v2 _pos) : pos(_pos) {}
+    contact(v2 _pos) : pos(_pos), ta(C2D_POLYGON), tb(C2D_POLYGON) {}
 
     contact(v2 _pos, size_t index) : contact(_pos) {
         A.polygon.idx = index;
@@ -1018,10 +1020,18 @@ struct contact {
     }
 
     bool operator==(const contact &other) const {
-        if (A.polygon.idx == other.A.polygon.idx && B.polygon.idx == other.B.polygon.idx) {
+        if (ta == C2D_POLYGON) {
+            if (tb == C2D_POLYGON) {
+                if (A.polygon.idx == other.A.polygon.idx && B.polygon.idx == other.B.polygon.idx) {
+                    return true;
+                }
+                return A.polygon.idx == other.B.polygon.idx && B.polygon.idx == other.A.polygon.idx; // 是否反了
+            } else {
+                return A.polygon.idx == other.A.polygon.idx;
+            }
+        } else {
             return true;
         }
-        return A.polygon.idx == other.B.polygon.idx && B.polygon.idx == other.A.polygon.idx; // 是否反了
     }
 
     bool operator!=(const contact &other) const {
@@ -1308,13 +1318,14 @@ bool solve_collision_polygon_circle(collision &c) {
     const auto CO = bodyA->CO * bodyB->CO;
 
     if (sat >= 0 && sat <= abL) { // 圆与线相交
-        c.N = ab.normal();
-        pos1 = pos0 + ab * sat; // 垂足
-        pos0 = bodyB->pos - c.N * (bodyB->r.value); // 圆上一点
-        const auto dist = (pos1 - pos0).dot(c.N);
-        const auto bias = std::log10(1 + dist) * CO;
-        pos0 -= c.N * bias;
-        contacts.erase(contacts.begin() + 1);
+        const auto p1 = pos0 + ab * sat; // 垂足
+        const auto p0 = bodyB->pos - c.N * (bodyB->r.value); // 圆上一点
+        const auto dist = (p1 - p0).dot(c.N);
+        if (dist > COLL_CIR_POLY_BIAS) {
+            const auto bias = std::log10(1 + dist) * CO;
+            pos0 = p0 - c.N * bias;
+            contacts.erase(contacts.begin() + 1);
+        }
     } else if (c.bodyB->contains(pos0)) { // 起点在圆内
         const auto ca = (bodyB->pos - pos0).normalize();
         const auto pt = bodyB->pos - ca * bodyB->r.value;
@@ -1341,6 +1352,8 @@ bool solve_collision_polygon_circle(collision &c) {
         auto sep = (contact.pos - va).dot(c.N);
         if (sep <= 0) { // 找在idxA向bodyA一侧的（bodyA内的接触点）
             contact.sep = sep; // sep越小，端点va到交点pos所成线段的斜率越接近法线N
+            contact.ta = C2D_POLYGON;
+            contact.tb = C2D_CIRCLE;
             contact.ra = contact.pos - c.bodyA->world();
             contact.rb = contact.pos - c.bodyB->world();
             c.contacts.push_back(contact);
@@ -1380,6 +1393,8 @@ bool solve_collision_circle(collision &c) {
         auto sep = (contact.pos - va).dot(c.N);
         if (sep <= 0) { // 找在idxA向bodyA一侧的（bodyA内的接触点）
             contact.sep = sep; // sep越小，端点va到交点pos所成线段的斜率越接近法线N
+            contact.ta = C2D_CIRCLE;
+            contact.tb = C2D_CIRCLE;
             contact.ra = contact.pos - c.bodyA->world();
             contact.rb = contact.pos - c.bodyB->world();
             c.contacts.push_back(contact);
