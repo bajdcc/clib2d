@@ -2,7 +2,7 @@
 
 在[apollonia](https://github.com/wgtdkp/apollonia)的基础上，结合先前的[C# 2D物理引擎](https://github.com/bajdcc/PhysicsEngine)，从零开始打造一个简单的2D物理引擎。
 
-**目前已经完成基本功能。**
+**目前已经完成基本功能，目前正整合[cliblisp](https://github.com/bajdcc/cliblisp)。**
 
 ## 介绍
 
@@ -38,7 +38,8 @@ Win7上使用CLion+MinGW编译没有问题，Linux、MacOS系统下暂未尝试�
 - [x] 第一部分已完成
 - [x] 第二部分已完成
 - [x] 第三部分已完成，单文件共**1537**行代码
-- [x] **第四部分进行中**，实现圆与多边形的碰撞，单文件共**2069**行代码
+- [x] 第四部分已完成，实现圆与多边形的碰撞，单文件共**2069**行代码
+- [x] **第五部分进行中**，用[cliblisp](https://github.com/bajdcc/cliblisp)作控制台语言
 
 分阶段最小化原则添加代码，功能由简到繁。前期的代码99%引自apollonia（为第一时间可以运行），后面会从头开始写。
 
@@ -79,6 +80,9 @@ Win7上使用CLion+MinGW编译没有问题，Linux、MacOS系统下暂未尝试�
     1. [ ] 遗传算法
     2. [ ] 神经网络
     3. [ ] 流体力学
+13. [ ] 结合[cliblisp](https://github.com/bajdcc/cliblisp)
+    1. [x] 【c5p1】整合代码
+    2. [ ] 控制台添加物体
 
 ## 改进
 
