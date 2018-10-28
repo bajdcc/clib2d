@@ -597,6 +597,9 @@ namespace clib {
 
     void c2d_world::stop_animation() {
         if (animation_id != 0) {
+            root = nullptr;
+            delete parser;
+            parser = nullptr;
             animation_id = 0;
         }
     }
