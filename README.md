@@ -4,6 +4,10 @@
 
 **目前已经完成基本功能，目前正整合[cliblisp](https://github.com/bajdcc/cliblisp)。**
 
+整合[cliblisp](https://github.com/bajdcc/cliblisp)进度：
+
+1. 按键盘数字7自动运行情景一脚本：`box #(pos 0.5d 0.5d) #(size 0.4d 0.5d) #(mass 1d)`创建一个矩形物体（#号替换为反引号）
+
 ## 介绍
 
 先前所做C#版本的[PhysicsEngine](https://github.com/bajdcc/PhysicsEngine)代码翻译自JS物理引擎[matter.js](https://github.com/liabru/matter-js)。
@@ -65,13 +69,14 @@ Win7上使用CLion+MinGW编译没有问题，Linux、MacOS系统下暂未尝试�
 9. [x] 【c3p1】joint 关节（铰链）的实现
     1. [x] 【c3p1】关节的数据结构
     2. [x] 【c3p1】关节的受力分析
-10. [x] 实现几种基本场景（分别按键盘上的数字1-5）
+10. [x] 实现几种基本场景（分别按键盘上的数字1-7）
     1. [x] 【c2p3】三角形
     2. [x] 【c2p3】金字塔
     3. [x] 【c2p3】方块堆叠
     4. [x] 【c3p1】牛顿摆（可测试完全弹性碰撞）
     5. [x] 【c3p1】铰链（测试关节joint结构）
     6. [x] 【c4p2】圆与多边形金字塔（测试圆的碰撞）
+    7. [x] 【c5p2】测试[cliblisp](https://github.com/bajdcc/cliblisp)控制接口
 11. [ ] 实现其他特性
     1. [x] 【c4p1】添加圆物体
     2. [x] 【c4p2】碰撞检测（多边形与圆）
@@ -80,9 +85,10 @@ Win7上使用CLion+MinGW编译没有问题，Linux、MacOS系统下暂未尝试�
     1. [ ] 遗传算法
     2. [ ] 神经网络
     3. [ ] 流体力学
-13. [ ] 结合[cliblisp](https://github.com/bajdcc/cliblisp)
+13. [ ] 整合[cliblisp](https://github.com/bajdcc/cliblisp)胶水语言
     1. [x] 【c5p1】整合代码
-    2. [ ] 控制台添加物体
+    2. [x] 【c5p2】编码添加物体
+    3. [ ] 控制台添加物体
 
 ## 改进
 
