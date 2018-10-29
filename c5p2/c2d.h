@@ -11,6 +11,8 @@
 #include <cmath>
 #include <chrono>
 
+#define LISP_CYCLE 10
+#define LISP_DEBUG 1
 #define FPS 30
 #define GRAVITY -9.8
 #define FRAME_SPAN (1.0 / FPS)

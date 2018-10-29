@@ -111,8 +111,20 @@ Win7上使用CLion+MinGW编译没有问题，Linux、MacOS系统下暂未尝试�
 
 ## 文章
 
+物理引擎系列：
+
 - [开篇](http://zhuanlan.zhihu.com/p/42669063)
 - [创建窗口](http://zhuanlan.zhihu.com/p/42773209)
+- [启用lisp](https://zhuanlan.zhihu.com/p/47896111)
+
+LISP系列：
+
+- [【Lisp系列】开篇](http://zhuanlan.zhihu.com/p/45897626)
+- [【Lisp系列】实现四则运算](http://zhuanlan.zhihu.com/p/46723048)
+- [【Lisp系列】实现GC](http://zhuanlan.zhihu.com/p/46993463)
+- [【Lisp系列】实现Lambda](http://zhuanlan.zhihu.com/p/47309037)
+- [【Lisp系列】大功告成](http://zhuanlan.zhihu.com/p/47569910)
+- [【Lisp系列】手动递归](http://zhuanlan.zhihu.com/p/47869195)
 
 ## 截图
 
@@ -127,3 +139,4 @@ Win7上使用CLion+MinGW编译没有问题，Linux、MacOS系统下暂未尝试�
 5. [GLUT](https://www.opengl.org/resources/libraries/glut/)
 6. [Box2D](http://box2d.org/)
 7. [Chipmunk2D](https://chipmunk-physics.net/)
+8. [cliblisp](https://github.com/bajdcc/cliblisp)

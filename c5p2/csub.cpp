@@ -34,6 +34,9 @@ namespace clib {
                 R"(def `caar (\ `x `(car (car x))))",
                 R"(def `cdar (\ `x `(cdr (car x))))",
                 R"(def `cddr (\ `x `(cdr (cdr x))))",
+                R"(def `cddr (\ `x `(cdr (cdr x))))",
+                R"((def `range (\ `(a b) `(if (== a b) `nil `(cons a (range (+ a 1) b))))))",
+                R"(def `map (\ `(f L) `(if (null? L) `nil `(cons (f (car L)) (map f (cdr L))))))",
         };
         try {
             for (auto &code : codes) {
@@ -111,10 +114,10 @@ namespace clib {
 #define DEFINE_VAL_OP(t) \
     template<> \
     struct gen_op<ast_##t> { \
-        static void add(cval *r, cval *v) { r->val._##t += v->val._##t; } \
-        static void sub(cval *r, cval *v) { r->val._##t -= v->val._##t; } \
-        static void mul(cval *r, cval *v) { r->val._##t *= v->val._##t; } \
-        static void div(cval *r, cval *v) { r->val._##t /= v->val._##t; } \
+        static void add(cval *r, cval *v) { if (v == nullptr) r->val._##t++; else r->val._##t += v->val._##t; } \
+        static void sub(cval *r, cval *v) { if (v == nullptr) r->val._##t--; else r->val._##t -= v->val._##t; } \
+        static void mul(cval *r, cval *v) { if (v != nullptr) r->val._##t *= v->val._##t; } \
+        static void div(cval *r, cval *v) { if (v != nullptr) r->val._##t /= v->val._##t; } \
         static bool eq(cval *r, cval *v) { return r->val._##t == v->val._##t; } \
         static bool ne(cval *r, cval *v) { return r->val._##t != v->val._##t; } \
         static bool le(cval *r, cval *v) { return r->val._##t <= v->val._##t; } \
@@ -242,11 +245,15 @@ namespace clib {
         auto r = val_obj(v->type);
         std::memcpy((char *) &r->val, (char *) &v->val, sizeof(v->val));
         v = v->next;
-        while (v) {
-            if (r->type != v->type)
-                error("invalid operator type");
+        if (v) {
+            while (v) {
+                if (r->type != v->type)
+                    error("invalid operator type");
+                calc(op, r->type, r, v, env);
+                v = v->next;
+            }
+        } else {
             calc(op, r->type, r, v, env);
-            v = v->next;
         }
         return r;
     }
@@ -888,6 +895,9 @@ namespace clib {
             i = i->next;
         }
         auto box = world->make_rect(mass, w, h, pos);
+#if LISP_DEBUG
+        printf("[DEBUG] Create box by lisp.\n");
+#endif
         VM_RET(VM_NIL);
     }
 }

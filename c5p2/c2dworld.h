@@ -114,7 +114,6 @@ namespace clib {
         std::string animation_code;
         cvm vm;
         cparser *parser;
-        cval *root;
 
         bool mouse_drag{false};
         v2 global_drag; // 鼠标拖动

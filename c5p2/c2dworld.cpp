@@ -574,22 +574,20 @@ namespace clib {
     void c2d_world::start_animation(uint32_t id) {
         if (animation_id != id) {
             if (id == 1) {
-                animation_code = "box `(pos 0.5d 0.5d) `(size 0.4d 0.5d) `(mass 1d)";
+                animation_code =
+                        R"(map (\ `n `(box`(pos 0.5d 0.5d) `(size 0.4d 0.5d) `(mass 1d))) (range 0 10))";
                 vm.reset();
                 try {
-                    vm.save();
                     parser = new cparser(animation_code);
                     auto node = parser->parse();
                     vm.prepare(node);
                 } catch (const std::exception &e) {
                     printf("RUNTIME ERROR: %s\n", e.what());
-                    vm.restore();
-                    vm.gc();
-                    root = nullptr;
                     delete parser;
                     parser = nullptr;
                     return;
                 }
+                vm.save();
             }
             animation_id = id;
         }
@@ -597,7 +595,6 @@ namespace clib {
 
     void c2d_world::stop_animation() {
         if (animation_id != 0) {
-            root = nullptr;
             delete parser;
             parser = nullptr;
             animation_id = 0;
@@ -606,7 +603,7 @@ namespace clib {
 
     void c2d_world::run_animation() {
         try {
-            if (vm.run(1) != nullptr) {
+            if (vm.run(LISP_CYCLE) != nullptr) {
                 vm.gc();
                 stop_animation();
             }
@@ -614,6 +611,7 @@ namespace clib {
             printf("RUNTIME ERROR: %s\n", e.what());
             vm.restore();
             vm.gc();
+            stop_animation();
         }
     }
 }
