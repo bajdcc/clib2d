@@ -6,6 +6,7 @@
 #ifndef CLIB2D_C2DCIRCLE_H
 #define CLIB2D_C2DCIRCLE_H
 
+#include <vector>
 #include "c2dbody.h"
 
 namespace clib {
@@ -49,6 +50,17 @@ namespace clib {
 
         void draw() override;
 
+        // 以idx为起点，下一顶点为终点的向量
+        v2 edge(size_t idx) const override;
+
+        v2 &vertex(size_t idx) override;
+
+        size_t index(size_t idx) const override;
+
+        size_t edges() const override;
+
+        std::vector<v2> vertices; // 多边形的顶点（本地坐标）
+        std::vector<v2> verticesWorld; // 多边形的顶点（世界坐标）
         decimal_square r; // 半径
     };
 }

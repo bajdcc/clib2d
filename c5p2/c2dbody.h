@@ -48,6 +48,15 @@ namespace clib {
 
         v2 rotate(const v2 &v) const;
 
+        // 以idx为起点，下一顶点为终点的向量
+        virtual v2 edge(size_t idx) const = 0;
+
+        virtual v2 &vertex(size_t idx) = 0;
+
+        virtual size_t index(size_t idx) const = 0;
+
+        virtual size_t edges() const = 0;
+
         // 不想写那么多get/set，先public用着
 #if ENABLE_SLEEP
         bool sleep{false}; // 是否休眠

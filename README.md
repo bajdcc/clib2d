@@ -1,5 +1,7 @@
 # clib2d（C++ 2D物理引擎）
 
+已整合Qt：[Qlib2d](https://github.com/bajdcc/Qlib2d)
+
 在[apollonia](https://github.com/wgtdkp/apollonia)的基础上，结合先前的[C# 2D物理引擎](https://github.com/bajdcc/PhysicsEngine)，从零开始打造一个简单的2D物理引擎。
 
 **目前已经完成基本功能，目前正整合[cliblisp](https://github.com/bajdcc/cliblisp)。**
@@ -101,13 +103,14 @@ Win7上使用CLion+MinGW编译没有问题，Linux、MacOS系统下暂未尝试�
 
 - [x] ~~拖动窗口导致的问题~~
 - [x] ~~标题位置随分辨率不一致的问题~~
+- [x] 将圆的碰撞实现转化为多边形的实现，解决碰撞问题
 
 目前遇到的问题：
 
 - [x] ~~碰撞机制存在问题~~
 - [x] ~~圆与多边形的碰撞检测存在问题~~
 - [x] ~~圆粘住边界的问题~~，~~圆无法弹跳~~，~~牛顿摆的问题~~
-- [ ] 圆的摩擦力问题
+- [x] ~~圆的摩擦力问题~~
 
 ## 文章
 

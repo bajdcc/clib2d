@@ -21,9 +21,6 @@ namespace clib {
                 size_t idx;
                 decimal sat;
             } polygon;
-            struct {
-                // none
-            } circle;
         } A{0}, B{0};
         v2 N; // 法线
     };
@@ -36,19 +33,13 @@ namespace clib {
     // separation：最大间隙
     // idx：最大间隙的轴
     // 参考Box2D：https://github.com/erincatto/Box2D/blob/master/Box2D/Collision/b2CollidePolygon.cpp#L23
-    int max_separating_axis_polygon(c2d_polygon *a, c2d_polygon *b, collision::intern &c);
-
-    int max_separating_axis_polygon_circle(c2d_polygon *a, c2d_circle *b, collision::intern &c);
-
-    int max_separating_axis_circle(c2d_circle *a, c2d_circle *b);
-
     int max_separating_axis(c2d_body *a, c2d_body *b, collision::intern &c);
 
     // 先用包围盒方法快速判断碰撞
     bool AABB_collide(c2d_body *a, c2d_body *b);
 
     // 参考Box2D：https://github.com/erincatto/Box2D/blob/master/Box2D/Collision/b2CollidePolygon.cpp#L64
-    static size_t incident_edge(const v2 &N, c2d_polygon *body);
+    static size_t incident_edge(const v2 &N, c2d_body *body);
 
     // Sutherland-Hodgman（多边形裁剪）
     // 参考Box2D：https://github.com/erincatto/Box2D/blob/master/Box2D/Collision/b2Collision.cpp#L201
@@ -57,14 +48,8 @@ namespace clib {
                 size_t i,
                 const v2 &p1, const v2 &p2);
 
-    // 计算碰撞（多边形）
-    bool solve_collision_polygon(collision &c);
-
-    // 计算碰撞（多边形与圆，这里的问题比较多）
-    bool solve_collision_polygon_circle(collision &c);
-
-    // 计算碰撞（圆）
-    bool solve_collision_circle(collision &c);
+    // 计算碰撞
+    bool solve_collision_internal(collision &c);
 
     // 计算碰撞（返回是否碰撞）
     bool solve_collision(collision &c);

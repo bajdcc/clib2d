@@ -21,6 +21,16 @@ namespace clib {
 
     void c2d_circle::init() {
         inertia.set(mass.value * r.square * 0.5);
+        auto n = int(std::floor(std::pow(2.0, std::log2(PI2 * r.value * CIRCLE_N))));
+        auto delta = 2.0 / n;
+        for (auto i = 0; i < n; i++) {
+            vertices.emplace_back(
+                    v2(r.value * std::cos(i * delta * M_PI),
+                       r.value * std::sin(i * delta * M_PI)));
+        }
+        for (auto &v : vertices) {
+            verticesWorld.push_back(v + pos); // 本地坐标转换为世界坐标
+        }
     }
 
     void c2d_circle::impulse(const v2 &p, const v2 &r) {
@@ -89,6 +99,9 @@ namespace clib {
     void c2d_circle::pass2() {
         pos += V * c2d_world::dt;
         angle += angleV * c2d_world::dt;
+        for (size_t i = 0; i < vertices.size(); ++i) {
+            verticesWorld[i] = vertices[i] + pos; // 本地坐标转换为世界坐标
+        }
     }
 
     void c2d_circle::pass3(const v2 &gravity) {
@@ -200,5 +213,21 @@ namespace clib {
         glDisable(GL_BLEND);
         glDisable(GL_LINE_SMOOTH);
         glLineWidth(1.0f);
+    }
+
+    v2 c2d_circle::edge(size_t idx) const {
+        return verticesWorld[index(idx + 1)] - verticesWorld[index(idx)];
+    }
+
+    v2 &c2d_circle::vertex(size_t idx) {
+        return verticesWorld[index(idx)];
+    }
+
+    size_t c2d_circle::index(size_t idx) const {
+        return idx % verticesWorld.size();
+    }
+
+    size_t c2d_circle::edges() const {
+        return verticesWorld.size();
     }
 }

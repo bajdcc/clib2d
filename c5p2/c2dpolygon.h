@@ -72,13 +72,13 @@ namespace clib {
         void draw() override;
 
         // 以idx为起点，下一顶点为终点的向量
-        v2 edge(size_t idx) const;
+        v2 edge(size_t idx) const override;
 
-        v2 &vertex(size_t idx);
+        v2 &vertex(size_t idx) override;
 
-        size_t index(size_t idx) const;
+        size_t index(size_t idx) const override;
 
-        size_t edges() const;
+        size_t edges() const override;
 
         v2 center; // 重心
         m2 R; // 旋转矩阵

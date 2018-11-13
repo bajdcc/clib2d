@@ -538,7 +538,7 @@ namespace clib {
                 title = "[SCENE DEFAULT] Rectangle, triangle and circle";
                 make_bound();
                 make_rect(1, 1, 1, {0, 0})->f = 0.2;
-                make_circle(1, 0.5, {1, 0})->f = 0.2;
+                make_circle(1, 0.4, {1, 0})->f = 0.2;
                 static std::vector<v2> vertices = {
                     {0, 0},
                     {1, 0},
